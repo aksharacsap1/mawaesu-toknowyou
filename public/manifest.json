@@ -1,0 +1,21 @@
+{
+  "name": "MAWAESU",
+  "short_name": "MAWAESU",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#08060d",
+  "theme_color": "#08060d",
+  "icons": [
+    {
+      "src": "logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
