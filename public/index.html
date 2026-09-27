@@ -4,7 +4,27 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="google-site-verification" content="8CxaVokVQYeElikM9vb1y-6qnhHtNzZpDB1sn_-_aY4" />
-  <title>MAWAESU</title>
+  <!-- Replace your-domain.com with the production domain before launch. -->
+  <title>MAWAESU | Self-Discovery &amp; Personal Growth</title>
+  <meta name="description" content="Get to know yourself better with MAWAESU: guided self-reflection, personality insights, colour analysis, and room design." />
+  <meta name="robots" content="index, follow" />
+  <meta name="theme-color" content="#08060d" />
+  <link rel="canonical" href="https://your-domain.com/" />
+  <link rel="icon" type="image/png" href="logo.png" />
+  <link rel="manifest" href="manifest.json" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="MAWAESU" />
+  <meta property="og:title" content="MAWAESU | Self-Discovery &amp; Personal Growth" />
+  <meta property="og:description" content="Get to know yourself better with guided self-reflection, personality insights, colour analysis, and room design." />
+  <meta property="og:url" content="https://your-domain.com/" />
+  <meta property="og:image" content="https://your-domain.com/logo.png" />
+  <meta property="og:image:alt" content="MAWAESU app logo" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="MAWAESU | Self-Discovery &amp; Personal Growth" />
+  <meta name="twitter:description" content="Get to know yourself better with guided self-reflection, personality insights, colour analysis, and room design." />
+  <meta name="twitter:image" content="https://your-domain.com/logo.png" />
+  <!-- Replace PLACEHOLDER with the token from Google Search Console if needed. -->
+  <!-- <meta name="google-site-verification" content="PLACEHOLDER" /> -->
 
   <link rel="icon" href="public/logo.png" />
   <meta property="og:image" content="public/logo.png" />
@@ -25,6 +45,9 @@
       font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text);scroll-behavior:smooth}
     body{min-height:100vh}
     #appRoot{min-height:100vh}
+    .brand-link{position:fixed;top:16px;left:20px;z-index:2;color:inherit;text-decoration:none}
+    .site-header{display:flex;align-items:center;gap:10px;font-size:1.1rem;font-weight:700;letter-spacing:.02em}
+    .site-header img{width:32px;height:32px;object-fit:contain}
 
     /* ---- generative aura layer, shared by every page ---- */
     .aura{position:fixed;inset:-15%;z-index:0;pointer-events:none;filter:blur(70px);opacity:.55;transition:opacity .6s ease}
@@ -196,6 +219,12 @@
   </style>
 </head>
 <body>
+<a class="brand-link" href="./" aria-label="MAWAESU home">
+  <header class="site-header">
+    <img src="logo.png" alt="" width="32" height="32" />
+    <span>MAWAESU</span>
+  </header>
+</a>
 <script type="module">
   // Import the functions you need from the SDKs you need
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
