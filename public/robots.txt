@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://aksharacsap1.github.io/mawaesu-toknowyou/sitemap.xml
+Sitemap: https://mawaesu-toknowyou.web.app/sitemap.xml

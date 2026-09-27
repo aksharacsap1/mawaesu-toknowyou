@@ -1,6 +1,6 @@
 import { writeFile } from "node:fs/promises";
 
-const configuredSiteUrl = process.env.SITE_URL || "https://your-domain.com";
+const configuredSiteUrl = process.env.SITE_URL || "https://mawaesu-toknowyou.web.app/";
 let siteUrl;
 
 try {
