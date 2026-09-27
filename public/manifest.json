@@ -1,8 +1,7 @@
 {
-  "name": "MAWAESU-TKY",
-  "short_name": "MAWAESU-TKY",
-  "description": "MAWAESU-TKY",
-  "start_url": "/",
+  "name": "MAWAESU",
+  "short_name": "MAWAESU",
+  "start_url": "https://github.io",
   "display": "standalone",
   "background_color": "#f4f4f4",
   "theme_color": "#f4f4f4",
