@@ -33,10 +33,12 @@ jobs:
       - name: Generate robots.txt and sitemap.xml
         run: node scripts/generate-seo-files.mjs
         env:
-          SITE_URL: ${{ vars.SITE_URL || 'https://your-domain.com' }}
+          SITE_URL: ${{ vars.SITE_URL || 'https://aksharacsap1.github.io/mawaesu-toknowyou/' }}
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v3
