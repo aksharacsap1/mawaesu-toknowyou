@@ -1,0 +1,16 @@
+{
+  "name": "MAWAESU-TKY",
+  "short_name": "MAWAESU-TKY",
+  "description": "MAWAESU-TKY",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f4f4",
+  "theme_color": "#f4f4f4",
+  "icons": [
+    {
+      "src": "public/logo.png",
+      "sizes": "any",
+      "type": "image/png"
+    }
+  ]
+}
