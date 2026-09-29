@@ -1,15 +1,28 @@
-# MAWAESU-TKY
-To know you, To be a Better you.  
+# Mawaesu
 
-## Firebase Hosting deployment
+An experimental web application exploring the intersection of Architectural Psychology and Living Space.
 
-The GitHub Actions workflow deploys the static site in `public/` to Firebase
-Hosting after every push to `main`. The production URL is
-`https://mawaesu-toknowyou.web.app/`.
+## About the Project
 
-The SEO generation script uses `SITE_URL` when set and otherwise defaults to
-the production URL. It generates `public/robots.txt` and `public/sitemap.xml`.
-The canonical and social metadata in `public/index.html` use the same
-production URL. The favicon and social sharing image are `public/logo.png`.
+**Mawaesu** is an independent digital concept that explores how spatial environments influence human cognition, emotion, and behaviour. By translating principles of environmental psychology into a living environment, this project simulates how digital layouts, user interfaces, and virtual structures affect the human psyche.
 
-Commit and push changes to `main` to trigger deployment.
+Key areas of exploration include:
+* Spatial Cognition: How users navigate, map, and perceive boundaries within a digital environment.
+* Environmental Affect: The emotional impact of digital layouts, scale, and visual hierarchy.
+
+## Creator
+
+* Charitha Sai Akshara Pokuri - Creator & Lead Developer
+
+##  Usage
+
+This repository contains proprietary software and design concepts. The source code is made visible for educational review and personal inspection only. 
+
+## License
+
+This project is **strictly proprietary**. 
+
+Unauthorised copying, modification, distribution, or commercial use of this software, code, or its specific design frameworks is strictly prohibited. For full legal terms, see the accompanying (LICENSE) file in this repository.
+
+Copyright (c) 2026 Charitha Sai Akshara Pokuri. All rights reserved.
+
