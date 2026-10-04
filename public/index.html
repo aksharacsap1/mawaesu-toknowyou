@@ -5,22 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="google-site-verification" content="8CxaVokVQYeElikM9vb1y-6qnhHtNzZpDB1sn_-_aY4" />
   <title>MAWAESU | Self-Discovery &amp; Personal Growth</title>
-  <meta name="description" content="Get to know yourself better with MAWAESU: guided self-reflection, personality insights, colour analysis, and room design." />
+  <meta name="description" content="Discover yourself, connect privately by username, meet anonymously for five minutes, and share public notes with the MAWAESU community." />
   <meta name="robots" content="index, follow" />
-  <meta name="theme-color" content="#08060d" />
+  <meta name="theme-color" content="#f6f5ec" />
   <link rel="canonical" href="https://mawaesu-toknowyou.web.app/" />
   <link rel="icon" type="image/png" href="logo.png" />
   <link rel="manifest" href="manifest.json" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="MAWAESU" />
   <meta property="og:title" content="MAWAESU | Self-Discovery &amp; Personal Growth" />
-  <meta property="og:description" content="Get to know yourself better with guided self-reflection, personality insights, colour analysis, and room design." />
+  <meta property="og:description" content="Discover yourself, connect privately by username, meet anonymously for five minutes, and share public notes with the MAWAESU community." />
   <meta property="og:url" content="https://mawaesu-toknowyou.web.app/" />
   <meta property="og:image" content="https://mawaesu-toknowyou.web.app/logo.png" />
   <meta property="og:image:alt" content="MAWAESU app logo" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="MAWAESU | Self-Discovery &amp; Personal Growth" />
-  <meta name="twitter:description" content="Get to know yourself better with guided self-reflection, personality insights, colour analysis, and room design." />
+  <meta name="twitter:description" content="Discover yourself, connect privately by username, meet anonymously for five minutes, and share public notes with the MAWAESU community." />
   <meta name="twitter:image" content="https://mawaesu-toknowyou.web.app/logo.png" />
   <!-- Replace PLACEHOLDER with the token from Google Search Console if needed. -->
   <!-- <meta name="google-site-verification" content="PLACEHOLDER" /> -->
@@ -36,11 +36,15 @@
       padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
     }
     *{box-sizing:border-box}
+    :focus-visible{outline:3px solid #ffe680;outline-offset:3px}
+    .skip-link{position:fixed;left:12px;top:10px;z-index:10001;transform:translateY(-150%);
+      background:#fff;color:#111;padding:12px 16px;border-radius:10px;font-weight:700}
+    .skip-link:focus{transform:none}
     html,body{margin:0;width:100%;overflow-x:hidden;background:#08060d;
       font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text);scroll-behavior:smooth}
     body{min-height:100vh}
     #appRoot{min-height:100vh}
-    .brand-link{position:fixed;top:16px;left:20px;z-index:2;color:inherit;text-decoration:none}
+    .brand-link{position:fixed;top:16px;left:20px;z-index:1001;color:inherit;text-decoration:none}
     .site-header{display:flex;align-items:center;gap:10px;font-size:1.1rem;font-weight:700;letter-spacing:.02em}
     .site-header img{width:32px;height:32px;object-fit:contain}
 
@@ -56,6 +60,7 @@
 
     .page{display:none;min-height:100vh;width:100%;padding:48px 22px;position:relative;z-index:1}
     .page.active{display:flex;flex-direction:column;align-items:center;justify-content:center}
+    .page.appPage.active{justify-content:flex-start;padding-top:78px}
     .page-inner{width:100%;max-width:1100px;margin:0 auto;position:relative;z-index:1}
     .center-text{text-align:center}
     .page h1,.page h2,.page h3{margin-top:0;line-height:1.18;letter-spacing:-.01em}
@@ -81,6 +86,7 @@
       transition:transform .22s ease,box-shadow .22s ease,opacity .22s ease,filter .22s ease}
     .btn:hover{transform:translateY(-2px);box-shadow:0 12px 26px rgba(0,0,0,.3);filter:brightness(1.06)}
     .btn:active{transform:translateY(0)}
+    .btn:disabled{cursor:not-allowed;opacity:.55;transform:none;filter:none;box-shadow:none}
     .btn-primary{background:linear-gradient(135deg,var(--gold),var(--gold-soft));color:#111}
     .btn-secondary{background:rgba(255,255,255,.08);color:var(--gold);border:1px solid rgba(255,215,0,.35)}
     .btn-purple{background:linear-gradient(135deg,#7b2ff7,#4b0082);color:#fff}
@@ -105,7 +111,8 @@
 
     .auth-sub,.analysisSub,.note,.muted{color:rgba(255,255,255,.75);line-height:1.55}
     .auth-switch{margin-top:14px;font-size:.94rem}
-    .auth-switch span{color:var(--gold-soft);font-weight:700;cursor:pointer;text-decoration:underline}
+    .auth-switch button{border:0;background:none;padding:0;color:var(--gold-soft);font:inherit;font-weight:700;cursor:pointer;text-decoration:underline}
+    .auth-switch button:focus-visible{text-decoration-thickness:3px}
     .password-hint{font-size:.83rem;color:rgba(0,0,0,.6);margin:6px auto 0;max-width:360px;line-height:1.45}
 
     .quiz-shell{width:100%;max-width:860px;margin:0 auto}
@@ -185,6 +192,7 @@
     .filterChip.active{background:#111;color:#fff}
 
     #backBtn{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);display:none;z-index:9999}
+    body.hasAppNavigation #backBtn{bottom:calc(82px + env(safe-area-inset-bottom,0px))}
 
     .iconRow{display:flex;justify-content:center;margin-bottom:6px}
     .iconRow svg{width:46px;height:46px;opacity:.9}
@@ -211,17 +219,388 @@
       .auth-card,.analysisCard{padding:18px}.profileWrapper2{grid-template-columns:1fr}
       .aura span{filter:blur(40px)}
     }
+    .socialGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:18px}
+    .socialCard{padding:20px;background:rgba(255,255,255,.07);border:1px solid var(--border);border-radius:18px}
+    .socialCard h2,.socialCard h3{margin:0 0 12px}
+    .socialCard input,.socialCard textarea,.socialCard select{background:#fff;color:#161022}
+    .socialRow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .socialRow input{flex:1;min-width:180px}
+    .socialList{display:grid;gap:10px;margin-top:12px}
+    .socialItem{padding:12px;border:1px solid var(--border);border-radius:14px;background:rgba(0,0,0,.16)}
+    .socialItem p{margin:6px 0}
+    .profileLink{border:0;background:none;color:var(--gold);font:inherit;font-weight:750;text-align:left;text-decoration:underline;cursor:pointer;padding:0}
+    .profileLink:focus-visible{outline:3px solid #ffe680;outline-offset:3px}
+    .socialItem .btn{padding:9px 16px;font-size:.9rem}
+    .socialStatus{min-height:1.4em;color:var(--gold);font-size:.92rem}
+    .chatMessages{height:260px;overflow:auto;display:flex;flex-direction:column;gap:8px;padding:10px;
+      border:1px solid var(--border);border-radius:14px;background:rgba(0,0,0,.2);margin:12px 0}
+    .chatHeader{display:flex;align-items:center;gap:14px}
+    .chatHeader .btn{width:46px;min-width:46px;padding:10px}
+    .chatHeader h2,.chatHeader p{margin:0 0 4px}
+    .chatBubble{align-self:flex-start;max-width:85%;padding:9px 12px;border-radius:14px;background:rgba(255,255,255,.12);white-space:pre-wrap;overflow-wrap:anywhere}
+    .chatBubble.mine{align-self:flex-end;background:rgba(255,215,0,.18)}
+    .postMedia{max-width:100%;max-height:360px;border-radius:14px;margin-top:10px}
+    .pollOptions{display:grid;gap:8px}
+    .reportDialog{width:min(92vw,560px);max-height:90vh;overflow:auto;background:#17121f;color:var(--text);
+      border:1px solid var(--border);border-radius:20px;padding:22px}
+    .reportDialog::backdrop{background:rgba(0,0,0,.72)}
+    .timerDisplay{font-size:1.8rem;font-weight:800;color:var(--gold)}
+    .communityNav{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin:0 auto 18px}
+    .roomPlanResults{display:grid;gap:12px;margin-top:16px}
+    .taskDay{padding:14px;border-radius:14px;background:rgba(255,255,255,.08);border:1px solid var(--border)}
+    .taskDay label{display:flex;gap:10px;align-items:flex-start;margin:10px 0}
+    .taskDay input[type=checkbox]{width:auto;margin:3px 0}
+    .affirmationCard{padding:18px;border-radius:16px;background:linear-gradient(135deg,rgba(255,215,0,.12),rgba(123,47,247,.18));border:1px solid rgba(255,215,0,.22)}
+    .affirmationText{font-size:1.25rem;line-height:1.55;font-style:italic}
+    .consentDialog{width:min(92vw,560px);max-height:90vh;overflow:auto;background:#17121f;color:var(--text);
+      border:1px solid var(--border);border-radius:20px;padding:22px}
+    .consentDialog::backdrop{background:rgba(0,0,0,.72)}
+    .appNav{position:fixed;left:0;right:0;bottom:0;z-index:1000;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+      padding:8px 12px calc(8px + env(safe-area-inset-bottom,0px));background:rgba(12,9,18,.97);
+      border-top:1px solid var(--border);backdrop-filter:blur(18px);box-shadow:0 -12px 36px rgba(0,0,0,.28)}
+    .appNav[hidden]{display:none}
+    .appNav .btn{min-width:0;min-height:54px;padding:5px 4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+      border:0;border-radius:12px;background:transparent;color:var(--muted);font-size:.72rem}
+    .appNav .btn svg{width:22px;height:22px}
+    .appNav .btn[aria-current="page"]{background:rgba(255,215,0,.12);color:var(--gold)}
+    .appPage{padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+    body.hasAppNavigation .page.active{padding-bottom:calc(110px + env(safe-area-inset-bottom,0px))}
+    .homeIntro{display:flex;justify-content:space-between;align-items:center;gap:16px;max-width:900px;margin:0 auto 20px}
+    .homeIntro h1{margin:0}
+    .noteComposer,.feedPanel,.profileSection{max-width:900px;margin:0 auto 18px;padding:20px;
+      background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:20px}
+    .noteComposer textarea{min-height:105px}
+    .noteComposer .socialRow{margin-top:10px}
+    .profileFeatureGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:10px}
+    .profileFeatureGrid .btn{width:100%}
+    .bottomSpacer{height:16px}
+    .iconBtn{width:100%;min-height:44px}
+    .pageStatus{min-height:1.5em;margin:10px 0 0;font-weight:600}
+    .pageHeading{max-width:820px;margin:0 auto 22px;text-align:center}
+    @media (max-width:680px){.brand-link{top:10px;left:12px}.homeIntro{align-items:flex-start;flex-direction:column}.noteComposer,.feedPanel,.profileSection{padding:16px}}
+    @media (prefers-reduced-motion:reduce){
+      *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+    }
+    @media (max-width:520px){.socialCard{padding:16px}.socialRow>.btn{width:auto}}
+
+    :root{
+      --gold:#d8bd88;--gold-soft:#c6a66a;--white:#f7f6f1;
+      --text:#f1f2ed;--muted:#aeb7ae;--border:rgba(221,229,216,.12);
+      --radius:20px;--ink:#101512;--surface:#171e1a;--surface-raised:#1c2520;
+      --accent:#d8bd88;--accent-ink:#1b1a15;--line:rgba(221,229,216,.11);
+      --shadow:0 22px 60px rgba(0,0,0,.22);
+    }
+    html,body{
+      background:#101512;color:var(--text);
+      font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      letter-spacing:.002em;scroll-behavior:smooth
+    }
+    body{
+      background:
+        radial-gradient(ellipse at 12% 0%,rgba(99,117,91,.16),transparent 34rem),
+        radial-gradient(ellipse at 92% 22%,rgba(126,105,71,.10),transparent 32rem),
+        #101512;
+    }
+    .aura{opacity:.12;filter:blur(100px)}
+    .aura span{mix-blend-mode:normal;animation-duration:32s}
+    .brand-link{top:18px;left:24px}
+    .site-header{gap:9px;font-size:.91rem;font-weight:760;letter-spacing:.15em}
+    .site-header img{width:30px;height:30px;filter:drop-shadow(0 4px 12px rgba(216,189,136,.12))}
+    .page{padding:76px 28px 40px}
+    .page.appPage.active{padding-top:84px}
+    .page-inner{max-width:1060px}
+    .page h1,.page h2,.page h3{letter-spacing:-.035em;font-weight:680}
+    .page h1{font-size:clamp(1.8rem,3.7vw,2.7rem);line-height:1.08}
+    .page h2{font-size:1.3rem;line-height:1.2}
+    .page h3{font-size:1.03rem}
+    .muted,.auth-sub,.analysisSub,.note{color:#aeb7ae;line-height:1.65}
+    .eyebrow{color:#c9b993;letter-spacing:.17em;font-size:.68rem;font-weight:750}
+    .card,.analysisCard,.auth-card,.socialCard,.noteComposer,.feedPanel,.profileSection,.polaroid,.question{
+      color:var(--text);background:rgba(24,32,27,.91);border:1px solid var(--line);
+      border-radius:var(--radius);box-shadow:var(--shadow);backdrop-filter:blur(18px)
+    }
+    .analysisCard,.auth-card{padding:28px}
+    .socialCard,.noteComposer,.feedPanel,.profileSection{padding:24px}
+    .polaroid{padding:20px}
+    #signupPage .auth-card,#forgotPage .auth-card{background:rgba(24,32,27,.96);color:var(--text);border-color:var(--line)}
+    #signupPage .auth-sub,#forgotPage .auth-sub{color:#aeb7ae}
+    #colorAnalysisPage,#roomAnalysisPage,#profilePage{color:var(--text)}
+    .btn{
+      min-height:44px;padding:11px 19px;border-radius:12px;
+      font-size:.93rem;font-weight:690;letter-spacing:.005em;
+      transition:background-color .18s ease,border-color .18s ease,box-shadow .18s ease,transform .18s ease,color .18s ease
+    }
+    .btn:hover{transform:translateY(-1px);box-shadow:0 9px 20px rgba(0,0,0,.2);filter:none}
+    .btn-primary{background:var(--accent);color:var(--accent-ink)}
+    .btn-primary:hover{background:#e4cda3}
+    .btn-secondary{background:#202923;color:#d8ded5;border:1px solid rgba(221,229,216,.13)}
+    .btn-secondary:hover{background:#28342c;border-color:rgba(216,189,136,.38)}
+    .btn-purple{background:#34443a;color:#eff4eb;border:1px solid rgba(172,195,166,.2)}
+    .btn-purple:hover{background:#405443}
+    .btn-danger{background:rgba(145,60,58,.15);color:#edaaa2;border:1px solid rgba(224,128,117,.23)}
+    .btn-danger:hover{background:rgba(145,60,58,.25)}
+    input,textarea,select{
+      color:#eef1ea;background:#1d2621;border:1px solid rgba(221,229,216,.15);
+      border-radius:12px;padding:13px 15px;font-size:.96rem;
+      transition:border-color .18s ease,box-shadow .18s ease,background-color .18s ease
+    }
+    input::placeholder,textarea::placeholder{color:#89948b}
+    input:focus,textarea:focus,select:focus{
+      outline:none;border-color:rgba(216,189,136,.65);
+      box-shadow:0 0 0 3px rgba(216,189,136,.12);background:#202a24
+    }
+    input[type="file"]{color:#bdc6bb}
+    input[type="file"]::file-selector-button{
+      margin-right:12px;padding:8px 12px;border:0;border-radius:8px;
+      color:#1b1a15;background:#d8bd88;font:inherit;font-weight:650;cursor:pointer
+    }
+    .auth-card{max-width:460px;margin-inline:auto;text-align:left}
+    .auth-card .eyebrow{display:block}
+    .auth-switch button{color:#dec99d}
+    .password-hint{color:#aeb7ae}
+    .skip-link{border-radius:10px;background:#f5f2e9;color:#172019}
+    .appNav{
+      background:rgba(18,24,20,.96);border-top:1px solid rgba(221,229,216,.11);
+      box-shadow:0 -10px 36px rgba(0,0,0,.2);backdrop-filter:blur(24px)
+    }
+    .appNav .btn{color:#929d93;font-size:.7rem;font-weight:620}
+    .appNav .btn:hover{background:rgba(255,255,255,.045);box-shadow:none}
+    .appNav .btn[aria-current="page"]{background:rgba(216,189,136,.1);color:#e3cca0}
+    .homeIntro{max-width:900px;margin-bottom:22px}
+    .homeIntro .muted{margin:.5rem 0 0}
+    .homeIntro>.btn{flex:0 0 auto}
+    .noteComposer,.feedPanel,.profileSection{background:rgba(24,32,27,.92);border-color:var(--line)}
+    .noteComposer h2,.feedPanel h2,.profileSection h2{margin-bottom:9px}
+    .noteComposer textarea{min-height:94px}
+    .socialGrid{gap:16px}
+    .socialCard{background:rgba(24,32,27,.9);border-color:var(--line)}
+    .socialCard input,.socialCard textarea,.socialCard select{background:#1d2621;color:#eef1ea}
+    .socialItem{padding:16px;border-radius:15px;background:#1b241f;border-color:rgba(221,229,216,.1)}
+    .socialItem p{color:#b6bfb5;line-height:1.6}
+    .socialItem .btn{padding:8px 13px;font-size:.83rem;min-height:38px}
+    .profileLink{color:#e0c998;text-decoration:none;font-weight:720}
+    .profileLink:hover{text-decoration:underline}
+    .socialStatus,.pageStatus{color:#ddc797}
+    .chatMessages{background:#111814;border-color:rgba(221,229,216,.11);border-radius:16px;padding:14px}
+    .chatBubble{background:#25312a;border:1px solid rgba(221,229,216,.06);border-radius:16px 16px 16px 5px;color:#e6ebe3}
+    .chatBubble.mine{background:#3c4434;border-color:rgba(216,189,136,.13);border-radius:16px 16px 5px 16px}
+    .timerDisplay{color:#e0c998}
+    .taskDay,.affirmationCard{background:#1c2520;border:1px solid var(--line);border-radius:16px}
+    .affirmationCard{background:linear-gradient(140deg,rgba(216,189,136,.11),rgba(79,99,80,.11))}
+    .roomScore{color:#e0c998}
+    .resultPill{background:#202a24;color:#f2f3ee;border:1px solid var(--line);box-shadow:none}
+    .resultPill .pct{background:none;color:#ddc797}
+    .miniCard{background:#202a24;color:#e9eee7;border:1px solid var(--line);box-shadow:none}
+    .tag{background:#303c32;color:#e0c998}
+    .selectorTile,.filterChip{background:#202a24;color:#e5e9e2;border-color:var(--line)}
+    .filterChip.active{background:#d8bd88;color:#1b1a15}
+    .swatch,.bigSwatch{box-shadow:0 7px 18px rgba(0,0,0,.2)}
+    #progressContainer{background:#29342d;box-shadow:none}
+    #progressBar{background:linear-gradient(90deg,#b9a16e,#e0cca0);box-shadow:none}
+    .question{background:#1a231e;border-color:var(--line);padding:30px}
+    .optionList button{background:#202a24;color:#e8ece5;border:1px solid rgba(221,229,216,.14);border-radius:12px}
+    .optionList button:hover{background:#2a382e;border-color:rgba(216,189,136,.48);transform:translateY(-1px)}
+    .pfpStage{background:linear-gradient(145deg,#27342b,#17201a);box-shadow:none}
+    .pfpPlaceholder{color:#a5afa5}
+    .profileWrapper{gap:18px}
+    .profileDangerRow{border-color:var(--line)}
+    .consentDialog,.reportDialog{background:#18201b;color:#eef1ea;border-color:var(--line);border-radius:20px;box-shadow:0 24px 80px rgba(0,0,0,.5)}
+    .consentDialog::backdrop,.reportDialog::backdrop{background:rgba(4,8,5,.72);backdrop-filter:blur(5px)}
+    .pageHeading{margin-bottom:20px}
+    .featureCard{background:#19221d;border-color:var(--line);box-shadow:0 14px 38px rgba(0,0,0,.18)}
+    #openingPage .page-inner{max-width:760px}
+    #openingPage .page-inner>h1{max-width:700px;margin-inline:auto;font-size:clamp(2.4rem,7vw,4.6rem)!important;
+      line-height:1.02;letter-spacing:-.055em;background:none!important;color:#f1eee5!important}
+    #openingPage .page-inner>p{max-width:590px!important;color:#aeb7ae}
+    #startQuizBtn{min-width:180px}
+    #backBtn{background:#202923;border-color:var(--line)}
+    :focus-visible{outline:3px solid #e7cc96;outline-offset:3px}
+    @media (min-width:900px){
+      .appNav{left:50%;right:auto;bottom:18px;transform:translateX(-50%);width:min(460px,calc(100% - 40px));
+        border:1px solid rgba(221,229,216,.13);border-radius:18px;padding:8px;
+        box-shadow:0 18px 48px rgba(0,0,0,.3)}
+      body.hasAppNavigation .page.active{padding-bottom:120px}
+      #backBtn{bottom:34px}
+      body.hasAppNavigation #backBtn{bottom:110px}
+    }
+    @media (max-width:680px){
+      .brand-link{top:16px;left:18px}
+      .page{padding:70px 18px 34px}
+      .page.appPage.active{padding-top:72px}
+      .page-inner{max-width:100%}
+      .socialCard,.noteComposer,.feedPanel,.profileSection{padding:18px}
+      .auth-card{padding:24px}
+    }
+    @media (max-width:520px){
+      .btn{padding:11px 15px}
+      .homeIntro>.btn{width:auto}
+      .socialRow>.btn{width:auto}
+      .chatMessages{height:min(38vh,340px)}
+    }
+
+    :root{
+      --text:#2c3c30;--muted:rgba(44,60,48,.72);--border:rgba(56,82,61,.16);
+      --gold:#56794f;--gold-soft:#78945e;--radius:22px;
+      color-scheme:light;
+    }
+    html,body{background:#f6f5ec;color:#2c3c30}
+    body{
+      background:
+        radial-gradient(ellipse at 5% 0%,rgba(244,218,160,.28),transparent 35rem),
+        linear-gradient(180deg,#faf9f2 0%,#f2f2e9 100%);
+    }
+    .aura{opacity:.12;filter:blur(100px)}
+    .aura span{mix-blend-mode:multiply}
+    .page h1,.page h2,.page h3,.site-header{color:#2c3c30}
+    .muted,.pageStatus,.science-note,.eyebrow,.password-hint{color:rgba(44,60,48,.7)}
+    .card,.analysisCard,.auth-card,.miniCard,.statCard,.profileSection,.feedPanel,
+    .noteComposer,.socialCard,.socialItem,.taskDay,.affirmationCard,.featureCard,.question{
+      background:rgba(255,255,249,.94);color:#2c3c30;border-color:rgba(56,82,61,.15);
+      box-shadow:0 12px 32px rgba(58,75,48,.075);backdrop-filter:blur(12px)
+    }
+    .btn-primary{background:linear-gradient(135deg,#5d8054,#73915d);color:#fff}
+    .btn-secondary{background:#fffef8;color:#456641;border:1px solid rgba(75,111,67,.32)}
+    .btn-purple{background:linear-gradient(135deg,#788b67,#596f50);color:#fff}
+    .btn-danger{background:#fff2ed;color:#963f35;border:1px solid rgba(150,63,53,.25)}
+    input,textarea,select,.socialCard input,.socialCard textarea,.socialCard select{
+      color:#283a2d;background:#fffefb;border-color:rgba(56,82,61,.2)
+    }
+    input::placeholder,textarea::placeholder{color:#7b887c}
+    input:focus,textarea:focus,select:focus{
+      border-color:#719268;box-shadow:0 0 0 3px rgba(113,146,104,.18);background:#fff
+    }
+    input[type="file"]{color:#455848}
+    input[type="file"]::file-selector-button{color:#fff;background:#68855c}
+    .auth-switch button,.profileLink{color:#496b43}
+    .appNav{
+      background:rgba(255,255,249,.96);border:1px solid rgba(56,82,61,.14);
+      box-shadow:0 -6px 28px rgba(52,71,48,.1);backdrop-filter:blur(22px)
+    }
+    .appNav .btn{color:#68786a}
+    .appNav .btn:hover{background:rgba(93,128,84,.08)}
+    .appNav .btn[aria-current="page"]{background:rgba(93,128,84,.12);color:#456641}
+    .socialItem{background:#fffefb;border-color:rgba(56,82,61,.14)}
+    .socialItem p{color:#526357}
+    .socialStatus,.timerDisplay,.roomScore{color:#55764d}
+    .chatMessages{background:#f1f2e9;border-color:rgba(56,82,61,.16)}
+    .chatBubble{background:#fffefb;border-color:rgba(56,82,61,.12);color:#2c3c30}
+    .chatBubble.mine{background:#dce9d4;border-color:rgba(91,126,81,.18)}
+    .affirmationCard{
+      position:relative;isolation:isolate;overflow:hidden;
+      background:linear-gradient(90deg,rgba(255,255,248,.96),rgba(255,255,248,.78)),url("images/garden-pond.png") center 54%/cover
+    }
+    .resultPill{background:#eef1e8;color:#354b37;border-color:rgba(56,82,61,.16)}
+    .resultPill .pct{color:#55764d}
+    .tag{background:#e8eee2;color:#4e7047}
+    .selectorTile,.filterChip{background:#fffef8;color:#344a38;border-color:rgba(56,82,61,.17)}
+    .filterChip.active{background:#5d8054;color:#fff}
+    #progressContainer{background:#e5e9df}
+    #progressBar{background:linear-gradient(90deg,#78945e,#b7a45e)}
+    .optionList button{background:#fffef8;color:#344a38;border-color:rgba(56,82,61,.2)}
+    .optionList button:hover{background:#edf2e8;border-color:#87a17b}
+    .pfpStage{background:linear-gradient(145deg,#e5ecdc,#f8f4e8)}
+    .pfpPlaceholder{color:#627765}
+    .consentDialog,.reportDialog{background:#fffef8;color:#2c3c30;border-color:rgba(56,82,61,.18);box-shadow:0 24px 80px rgba(41,59,42,.22)}
+    .consentDialog::backdrop,.reportDialog::backdrop{background:rgba(35,49,37,.48);backdrop-filter:blur(5px)}
+    .featureCard{background:#fffef8;border-color:rgba(56,82,61,.16);box-shadow:0 12px 32px rgba(58,75,48,.08)}
+    #openingPage .page-inner>h1{color:#2c3c30!important}
+    #openingPage .page-inner>p{color:#536556}
+    #backBtn{background:#fffef8;color:#456641;border-color:rgba(56,82,61,.18)}
+    :focus-visible{outline:3px solid #527a49;outline-offset:3px}
+    .communityHero{
+      position:relative;isolation:isolate;display:flex;align-items:flex-end;min-height:250px;
+      overflow:hidden;padding:clamp(22px,5vw,42px);border:1px solid rgba(56,82,61,.13);
+      border-radius:26px;background:#52664b;box-shadow:0 18px 45px rgba(49,69,44,.14);margin-bottom:20px
+    }
+    .communityHero::before{
+      content:"";position:absolute;inset:0;z-index:-1;
+      background:linear-gradient(90deg,rgba(23,42,27,.66),rgba(30,46,30,.2) 75%),url("images/sunlit-meadow.png") center 54%/cover
+    }
+    .communityHero h1,.communityHero .eyebrow,.communityHero .muted{color:#fff}
+    .communityHero .eyebrow{letter-spacing:.16em}
+    .communityHero .muted{max-width:38rem;text-shadow:0 1px 8px rgba(0,0,0,.32)}
+    .homeIntro{align-items:flex-end}
+    .noteComposer textarea{min-height:76px}
+    .postExtras{margin:12px 0}
+    .postExtras summary{
+      width:fit-content;color:#496b43;font-weight:680;cursor:pointer;
+      padding:8px 2px;text-underline-offset:4px
+    }
+    .postExtras[open] summary{margin-bottom:8px}
+    .postExtrasContent{display:grid;gap:10px;padding:12px 0}
+    .profileTabs{
+      display:flex;gap:8px;overflow-x:auto;border-bottom:1px solid rgba(56,82,61,.16);
+      margin:14px 0;padding-bottom:2px
+    }
+    .profileTab{
+      flex:0 0 auto;min-height:42px;padding:8px 15px;border:0;border-bottom:2px solid transparent;
+      border-radius:10px 10px 0 0;background:transparent;color:#69796a;font:inherit;font-weight:650;cursor:pointer
+    }
+    .profileTab.active,.profileTab[aria-selected="true"]{border-bottom-color:#5d8054;color:#385a37}
+    .profileDisplayName{margin:12px 0 0;text-align:center}
+    .profileAvatar{
+      flex:0 0 auto;width:48px;height:48px;object-fit:cover;border-radius:50%;
+      background:#e8eee2;border:1px solid rgba(56,82,61,.15)
+    }
+    .profileAvatarPlaceholder{padding:4px}
+    .profileSearchResult,.publicProfileHeader,.noteByline,.noteComment,.conversationRow{
+      display:flex;align-items:flex-start;gap:12px
+    }
+    .profileSearchIdentity,.conversationDetails{display:grid;gap:4px;min-width:0;flex:1}
+    .profileSearchIdentity p,.conversationPreview{margin:3px 0 0;overflow-wrap:anywhere}
+    .publicProfileHeader{align-items:center;margin:18px 0}
+    .publicProfileHeader .profileAvatar{width:76px;height:76px}
+    .publicProfileHeader h2,.publicProfileHeader p{margin:0 0 5px}
+    .noteCard{padding:20px 22px;background:#fffefa}
+    .noteByline{align-items:center;margin-bottom:14px}
+    .noteByline .profileAvatar{width:42px;height:42px}
+    .noteByline>div{display:grid;gap:2px;min-width:0}
+    .noteTimestamp{margin-left:auto;white-space:nowrap;font-size:.8rem}
+    .noteTitle{font-family:Georgia,"Times New Roman",serif;font-size:clamp(1.25rem,3vw,1.65rem);line-height:1.25;margin:8px 0}
+    .noteBody{font-family:Georgia,"Times New Roman",serif;white-space:pre-wrap;line-height:1.75;font-size:1.02rem;color:#3b493c}
+    .originalAuthor{font-size:.9rem;font-style:italic;margin-top:8px}
+    .noteComments{border-top:1px solid rgba(56,82,61,.12);margin-top:14px;padding-top:10px}
+    .noteComments summary{color:#496b43;font-weight:650;cursor:pointer;padding:6px 0}
+    .noteComment{align-items:flex-start;padding:10px 0;border-top:1px solid rgba(56,82,61,.08)}
+    .noteComment .profileAvatar{width:34px;height:34px}
+    .noteComment>div{min-width:0;flex:1}
+    .noteCommentHeading{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .noteCommentHeading time,.conversationMeta{font-size:.78rem;color:#728072}
+    .noteComment p{white-space:pre-wrap;overflow-wrap:anywhere}
+    .conversationRow{align-items:center}
+    .conversationMeta{display:flex;align-items:center;gap:10px}
+    .conversationRow .btn{flex:0 0 auto}
+    .unreadIndicator{border-radius:999px;background:#5d8054;color:white;font-weight:650;padding:3px 8px}
+    .conversationPreview{font-size:.92rem}
+    @media (max-width:680px){
+      .communityHero{min-height:220px;border-radius:20px;padding:24px}
+      .homeIntro{align-items:flex-start}
+      .noteCard{padding:16px}
+      .conversationRow{align-items:flex-start;flex-wrap:wrap}
+      .conversationRow .btn{width:auto}
+      .noteTimestamp{font-size:.72rem}
+    }
+    @media (prefers-reduced-motion:reduce){
+      *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+    }
   </style>
 </head>
 <body>
-<a class="brand-link" href="https://mawaesu-toknowyou.web.app/" aria-label="MAWAESU home">
+<a id="skipToMainContent" class="skip-link" href="#appRoot">Skip to main content</a>
+<a class="brand-link" href="#mainMenuPage" data-go="mainMenuPage" aria-label="MAWAESU feature menu">
   <header class="site-header">
     <img src="logo.png" alt="Mawaesu Logo" class="app-logo" width="32" height="32" />
     <span>MAWAESU</span>
   </header>
 </a>
   <div class="aura" id="auraLayer"><span></span><span></span><span></span><span></span><span></span></div>
-  <div id="appRoot">
+  <nav id="appNavigation" class="appNav" aria-label="Main navigation" hidden>
+    <button class="btn" type="button" data-go="mainMenuPage" aria-label="Home and public notes" aria-current="page"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg><span>Home</span></button>
+    <button class="btn" type="button" data-go="searchPage" aria-label="Search MAWAESU users"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg><span>Search</span></button>
+    <button class="btn" type="button" data-go="chatsPage" aria-label="Chats and anonymous chat"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 11.5a7.5 7.5 0 0 1-8 7.5 8.8 8.8 0 0 1-3.5-.7L4 20l1.4-3.7A7 7 0 0 1 4 11.5 7.5 7.5 0 0 1 12 4a7.5 7.5 0 0 1 8 7.5Z"/></svg><span>Chats</span></button>
+    <button class="btn" type="button" data-go="profilePage" aria-label="Your profile and notes"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.2 3.3-7 8-7s8 2.8 8 7"/></svg><span>Profile</span></button>
+  </nav>
+  <main id="appRoot">
 
     <div id="loginPage" class="page auth-page active">
       <div class="page-inner">
@@ -229,11 +608,11 @@
           <div class="eyebrow">Welcome back</div>
           <h1>Sign in to MAWAESU</h1>
           <p class="auth-sub">A calm, consistent entry point — predictable flows reduce cognitive load before self-reflective work.</p>
-          <input id="loginEmail" type="email" placeholder="Email" autocomplete="email" />
-          <input id="loginPassword" type="password" placeholder="Password" autocomplete="current-password" />
+          <input id="loginEmail" type="email" placeholder="Email" aria-label="Email" autocomplete="email" />
+          <input id="loginPassword" type="password" placeholder="Password" aria-label="Password" autocomplete="current-password" />
           <button id="loginBtn" class="btn btn-primary">Login</button>
-          <p class="auth-switch">New here? <span data-go="signupPage">Create an account</span></p>
-          <p class="auth-switch"><span data-go="forgotPage">Forgot password?</span></p>
+          <p class="auth-switch">New here? <button type="button" data-go="signupPage">Create an account</button></p>
+          <p class="auth-switch"><button type="button" data-go="forgotPage">Forgot password?</button></p>
         </div>
       </div>
     </div>
@@ -243,9 +622,9 @@
         <div class="auth-card rise d1">
           <h1>Reset Password</h1>
           <p class="auth-sub">Enter your registered email and we'll send a password reset link.</p>
-          <input id="forgotEmail" type="email" placeholder="Registered email" autocomplete="email" />
+          <input id="forgotEmail" type="email" placeholder="Registered email" aria-label="Registered email" autocomplete="email" />
           <button id="resetBtn" class="btn btn-primary">Send Reset Email</button>
-          <p class="auth-switch"><span data-go="loginPage">← Back to Login</span></p>
+          <p class="auth-switch"><button type="button" data-go="loginPage">← Back to Login</button></p>
         </div>
       </div>
     </div>
@@ -255,14 +634,12 @@
         <div class="auth-card rise d1">
           <h1>Create Account</h1>
           <p class="auth-sub">Start your journey of self-discovery</p>
-          <input id="signupName" type="text" placeholder="Full name" autocomplete="name" />
-          <input id="signupUsername" type="text" placeholder="Username (e.g. jordan_lee)" autocomplete="username" />
-          <p class="password-hint" style="margin-top:-4px">3–20 characters, unique across MAWAESU — letters, numbers, underscores or periods only.</p>
-          <input id="signupEmail" type="email" placeholder="Email address" autocomplete="email" />
-          <input id="signupPassword" type="password" placeholder="Create a strong password" autocomplete="new-password" />
+          <input id="signupName" type="text" placeholder="Full name" aria-label="Full name" autocomplete="name" />
+          <input id="signupEmail" type="email" placeholder="Email address" aria-label="Email address" autocomplete="email" />
+          <input id="signupPassword" type="password" placeholder="Create a strong password" aria-label="Create a strong password" autocomplete="new-password" />
           <p class="password-hint">Must be at least 8 characters and include uppercase, lowercase, number, and special character.</p>
           <button id="signupBtn" class="btn btn-primary">Sign Up</button>
-          <p class="auth-switch">Already have an account? <span data-go="loginPage">Log in</span></p>
+          <p class="auth-switch">Already have an account? <button type="button" data-go="loginPage">Log in</button></p>
         </div>
       </div>
     </div>
@@ -273,6 +650,52 @@
         <h1 class="rise d2" style="font-size:clamp(1.8rem,5vw,3.2rem);background:linear-gradient(90deg,#ffd700,#ff8fb1,#7b2ff7);-webkit-background-clip:text;background-clip:text;color:transparent">To know you, take this test.</h1>
         <p class="rise d3 muted" style="max-width:520px;margin:0 auto 26px">Each answer maps to an emotional archetype, a colour psychology profile, and a neuroscience-backed room design — built from validated affect and environmental-psychology research.</p>
         <div class="rise d4"><button id="startQuizBtn" class="btn btn-primary">TEST NOW</button></div>
+        <p id="openingStatus" class="pageStatus" role="status" aria-live="polite"></p>
+      </div>
+    </div>
+
+    <div id="mainMenuPage" class="page appPage" aria-labelledby="mainMenuHeading">
+      <div class="page-inner">
+        <header class="communityHero" aria-label="Welcome to the MAWAESU community">
+          <div>
+            <div class="eyebrow">MAWAESU community</div>
+            <h1 id="mainMenuHeading" tabindex="-1">A little space to grow.</h1>
+            <p class="muted">Ideas, reflections, and conversations from the community.</p>
+          </div>
+        </header>
+        <div class="homeIntro">
+          <span class="muted">Take a breath. See what the community is sharing.</span>
+          <button class="btn btn-secondary" type="button" data-go="profilePage">Your profile</button>
+        </div>
+        <p id="mainMenuStatus" class="pageStatus" role="status" aria-live="polite"></p>
+        <section id="notesSection" class="noteComposer" aria-labelledby="notesHeading">
+          <h2 id="notesHeading">Share a note</h2>
+          <p class="muted">Post a thought, photo, video, or poll. Notes and comments are visible to signed-in members.</p>
+          <input id="newNoteTitle" type="text" maxlength="160" aria-label="Note title (optional)" placeholder="Title (optional)" />
+          <textarea id="newNoteText" maxlength="3000" aria-label="Write a public note" placeholder="What is on your mind?"></textarea>
+          <details class="postExtras">
+            <summary>Add a photo, video, or poll</summary>
+            <div class="postExtrasContent">
+              <label for="noteMediaInput">Attach a photo or video (optional)</label>
+              <input id="noteMediaInput" type="file" accept="image/*,video/*" />
+              <div id="pollComposer" class="socialList">
+                <input id="pollQuestionInput" type="text" maxlength="240" aria-label="Poll question (optional)" placeholder="Poll question (optional)" />
+                <input class="pollOptionInput" type="text" maxlength="120" aria-label="Poll option 1" placeholder="Poll option 1" />
+                <input class="pollOptionInput" type="text" maxlength="120" aria-label="Poll option 2" placeholder="Poll option 2" />
+              </div>
+            </div>
+          </details>
+          <div class="socialRow">
+            <button id="publishNoteBtn" class="btn btn-primary" type="button">Publish note</button>
+            <span id="noteComposerStatus" class="socialStatus" role="status" aria-live="polite"></span>
+          </div>
+        </section>
+        <section class="feedPanel" aria-labelledby="feedHeading">
+          <h2 id="feedHeading">Public notes</h2>
+          <div id="publicNotesFeed" class="socialList"></div>
+          <button id="loadMoreNotesBtn" class="btn btn-secondary" type="button" hidden>Load more notes</button>
+        </section>
+        <p class="bottomSpacer" aria-hidden="true"></p>
       </div>
     </div>
 
@@ -333,22 +756,34 @@
     <div id="roomIntroPage" class="page">
       <div class="page-inner center-text">
         <div class="iconRow rise d1"><svg viewBox="0 0 24 24" fill="none" stroke="#ffd700" stroke-width="1.4"><path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/></svg></div>
-        <h1 class="rise d2">🧠 The Psychological Connection Between Mind and Space</h1>
+        <h1 class="rise d2">The Psychological Connection Between Mind and Space</h1>
         <p class="rise d3">The mind and the spaces we live in are deeply intertwined — walls, light and material shape amygdala reactivity and cortisol baseline.</p>
-        <div class="rise d4"><button id="roomAnalysisBtn" class="btn btn-secondary">ROOM ANALYSIS</button></div>
+        <div class="rise d4"><button id="roomAnalysisBtn" class="btn btn-secondary">DESCRIBE YOUR ROOM</button></div>
       </div>
     </div>
 
     <div id="roomAnalysisPage" class="page">
       <div class="analysisWrap">
         <div class="analysisCard rise d1">
-          <div class="eyebrow">Environmental psychology</div>
-          <h1>Room Analysis</h1>
-          <div class="analysisSub">Detailed room design guidance based on your archetype, backed by neurological and hormonal response data.</div>
+          <div class="eyebrow">A room plan shaped around you</div>
+          <h1>Describe your room</h1>
+          <div class="analysisSub">Tell us about your space and what you want it to feel like. Get a practical, archetype-informed plan paced to the time you can give each day. Your description stays on this device and is not sent to an AI service.</div>
           <div id="topResults" class="analysisGrid"></div>
           <div id="wfflContainer" class="analysisSection analysisStack"></div>
           <div id="elementDetailPanel" class="analysisSection"></div>
           <div id="tswpContainer" class="analysisSection analysisStack"></div>
+          <section class="socialCard roomDescriptionCard" style="margin-top:20px">
+            <h2>Your space, in your words</h2>
+            <p class="muted">Mention the room type, what is already there, what feels comfortable or difficult, and what you would like to change. Avoid including personal or identifying details.</p>
+            <label for="roomDescriptionInput">Describe your room and what you want it to feel like</label>
+            <textarea id="roomDescriptionInput" maxlength="2000" rows="6" placeholder="For example: My small bedroom has one window and a desk near the bed. The desk gets cluttered, and the room feels dim in the evening. I would like it to feel calmer and easier to focus in."></textarea>
+            <p class="muted">Your description is used only in this browser to tailor suggestions. It is not uploaded or saved with your plan.</p>
+            <label for="dailyRoomMinutes">How many minutes can you spend each day?</label>
+            <input id="dailyRoomMinutes" type="number" min="5" max="480" step="5" value="30" />
+            <button id="createRoomPlanBtn" class="btn btn-primary" type="button">Create my room plan</button>
+            <p id="roomPlanStatus" class="socialStatus" role="status" aria-live="polite"></p>
+            <div id="roomPlanResults" class="roomPlanResults"></div>
+          </section>
           <div class="center-text" style="margin-top:18px">
             <button id="goToProfileBtn" class="btn btn-primary">Go to Profile</button>
           </div>
@@ -357,7 +792,7 @@
       </div>
     </div>
 
-    <div id="profilePage" class="page">
+    <div id="profilePage" class="page appPage">
       <div class="page-inner">
         <h1 class="center-text">Your Profile</h1>
         <div class="profileWrapper profileWrapper2">
@@ -369,18 +804,42 @@
                 <span>Add a photo</span>
               </div>
             </div>
+            <h2 id="displayProfileName" class="profileDisplayName"></h2>
             <div id="displayUsername" class="usernameTag"></div>
             <label for="uploadAvatar" class="btn btn-secondary" style="display:block;text-align:center;margin:12px 0">Choose Photo</label>
             <input type="file" id="uploadAvatar" accept="image/*" style="display:none" />
-            <textarea id="profileBio" placeholder="Write your quote or bio..."></textarea>
+            <label for="profileDisplayName">Display name</label>
+            <input id="profileDisplayName" type="text" maxlength="60" autocomplete="name" placeholder="How should people know you?" />
+            <label for="profileBio">Bio</label>
+            <textarea id="profileBio" maxlength="280" aria-label="Profile quote or bio" placeholder="Write your quote or bio..."></textarea>
+            <label for="profileUsername">Username</label>
+            <input id="profileUsername" type="text" minlength="3" maxlength="20" aria-label="Username" autocomplete="username" placeholder="Choose a username" />
+            <p class="muted">3–20 letters, numbers, periods, or underscores. Other members can search this username.</p>
             <button id="saveProfileBtn" class="btn btn-primary" style="width:100%;margin-top:10px">Save Profile</button>
-            <div class="profileDangerRow">
-              <button id="signOutBtn" class="btn btn-secondary" type="button" style="width:100%">Sign Out</button>
-              <button id="deleteDataBtn" class="btn btn-danger" type="button" style="width:100%">Delete My Results</button>
-            </div>
+            <p id="profileSaveStatus" class="pageStatus" role="status" aria-live="polite"></p>
           </div>
 
           <div class="rise d2">
+            <section class="profileSection" aria-labelledby="profileNotesHeading">
+              <h2 id="profileNotesHeading">Your writing</h2>
+              <div class="profileTabs" role="tablist" aria-label="Your profile content">
+                <button id="myNotesTab" class="profileTab active" type="button" role="tab" aria-selected="true" aria-controls="myNotesPanel" data-profile-tab="notes">My Notes</button>
+                <button id="myFeaturedTab" class="profileTab" type="button" role="tab" aria-selected="false" aria-controls="myFeaturedPanel" data-profile-tab="featured">Featured</button>
+                <button id="mySavedTab" class="profileTab" type="button" role="tab" aria-selected="false" aria-controls="savedNotesPanel" data-profile-tab="saved">Saved</button>
+              </div>
+              <div id="myNotesPanel" role="tabpanel" aria-labelledby="myNotesTab"><div id="myNotesFeed" class="socialList"></div></div>
+              <div id="myFeaturedPanel" role="tabpanel" aria-labelledby="myFeaturedTab" hidden><div id="myFeaturedNotesFeed" class="socialList"></div></div>
+              <div id="savedNotesPanel" role="tabpanel" aria-labelledby="mySavedTab" hidden><p class="muted">Only you can see the notes you save.</p><div id="savedNotesFeed" class="socialList"></div></div>
+            </section>
+            <section class="profileSection" aria-labelledby="profileToolsHeading">
+              <h2 id="profileToolsHeading">Your MAWAESU tools</h2>
+              <div class="profileFeatureGrid">
+                <button class="btn btn-primary" type="button" data-menu-action="quiz">Take the quiz</button>
+                <button class="btn btn-secondary" type="button" data-menu-action="results">View your results</button>
+                <button class="btn btn-purple" type="button" data-menu-action="room">Room analysis &amp; scan</button>
+                <button class="btn btn-secondary" type="button" data-menu-action="affirmation">Today's affirmation</button>
+              </div>
+            </section>
             <div class="analysisCard"><h2>Archetype</h2><div id="displayArchetypeFull"></div>
               <button class="btn btn-secondary" style="margin-top:12px" data-go="resultPage">View full archetype reveal →</button>
             </div>
@@ -392,12 +851,152 @@
             <div class="analysisCard"><h2>Room Analysis</h2><div id="displayRoomFull"></div>
               <button class="btn btn-secondary" style="margin-top:12px" data-go="roomAnalysisPage">View full room analysis →</button>
             </div>
+            <div class="analysisCard"><h2>Your daily affirmation</h2>
+              <div class="affirmationCard">
+                <div id="dailyAffirmationText" class="affirmationText" aria-live="polite"></div>
+                <p id="affirmationArchetype" class="muted"></p>
+              </div>
+              <button id="refreshAffirmationBtn" class="btn btn-secondary" type="button">Show today's affirmation</button>
+              <p class="muted">This affirmation is picked for you once a day. You can send it to any of your connections from the community.</p>
+            </div>
           </div>
         </div>
+        <section class="profileSection" aria-labelledby="profileAccountHeading">
+          <h2 id="profileAccountHeading">Account</h2>
+          <p id="accountActionStatus" class="socialStatus" role="status" aria-live="polite"></p>
+          <div class="profileFeatureGrid">
+            <button id="signOutBtn" class="btn btn-secondary" type="button">Sign out</button>
+            <button id="deactivateAccountBtn" class="btn btn-secondary" type="button">Deactivate account</button>
+            <button id="deleteAccountBtn" class="btn btn-danger" type="button">Delete account</button>
+          </div>
+          <button id="deleteDataBtn" class="btn btn-secondary" type="button" style="margin-top:12px">Reset quiz results</button>
+        </section>
       </div>
     </div>
 
-  </div>
+    <div id="searchPage" class="page appPage">
+      <div class="page-inner">
+        <h1 class="pageHeading">Search people</h1>
+        <section id="peopleSection" class="socialCard">
+          <p class="muted">Find a MAWAESU member by username. Profiles open when you select a search result; there are no follower or following lists.</p>
+          <div class="socialRow">
+            <input id="peopleSearchInput" type="search" maxlength="20" placeholder="Search username" aria-label="Search by username" autocomplete="off" aria-controls="peopleSearchResults" aria-describedby="peopleSearchStatus" />
+            <button id="peopleSearchBtn" class="btn btn-primary">Search</button>
+          </div>
+          <div id="peopleSearchStatus" class="socialStatus" role="status" aria-live="polite"></div>
+          <div id="peopleSearchResults" class="socialList" role="list" aria-label="Matching MAWAESU members"></div>
+          <section id="publicUserProfile" class="profileSection" aria-live="polite" hidden>
+            <button id="closePublicProfileBtn" class="btn btn-secondary" type="button">Back to search</button>
+            <div id="publicUserProfileContent"></div>
+            <button id="connectPublicProfileBtn" class="btn btn-primary" type="button">Request connection</button>
+            <button id="blockPublicProfileBtn" class="btn btn-danger" type="button">Block this person</button>
+            <div class="profileTabs" role="tablist" aria-label="Public profile content">
+              <button id="publicNotesTab" class="profileTab active" type="button" role="tab" aria-selected="true" aria-controls="publicNotesPanel" data-public-profile-tab="notes">Notes</button>
+              <button id="publicFeaturedTab" class="profileTab" type="button" role="tab" aria-selected="false" aria-controls="publicFeaturedPanel" data-public-profile-tab="featured">Featured</button>
+            </div>
+            <div id="publicNotesPanel" role="tabpanel" aria-labelledby="publicNotesTab"><div id="publicUserNotesFeed" class="socialList"></div></div>
+            <div id="publicFeaturedPanel" role="tabpanel" aria-labelledby="publicFeaturedTab" hidden><div id="publicUserFeaturedFeed" class="socialList"></div></div>
+          </section>
+          <h2 style="margin-top:24px">Connection requests</h2>
+          <div id="connectionRequests" class="socialList"></div>
+        </section>
+      </div>
+    </div>
+
+    <div id="chatsPage" class="page appPage">
+      <div class="page-inner">
+        <h1 class="pageHeading">Chats</h1>
+        <div id="chatsOverview">
+          <section id="randomSection" class="socialCard">
+            <h2>Unknown chat</h2>
+            <p class="muted">Meet someone anonymously for five minutes. Your username remains hidden unless you choose to share it at the end.</p>
+            <div id="randomEligibility" class="socialStatus" role="status" aria-live="polite"></div>
+            <button id="startRandomChatBtn" class="btn btn-purple">Start a 5-minute chat</button>
+            <div id="randomChatPanel" hidden>
+              <div class="timerDisplay" id="randomChatTimer" aria-live="polite">05:00</div>
+              <div id="randomChatMessages" class="chatMessages" aria-live="polite"></div>
+              <div class="socialRow">
+                <input id="randomMessageInput" type="text" maxlength="2000" placeholder="Say hello…" aria-label="Anonymous chat message" />
+                <button id="sendRandomMessageBtn" class="btn btn-primary">Send</button>
+              </div>
+              <div class="socialRow" style="margin-top:12px">
+                <button id="leaveRandomChatBtn" class="btn btn-secondary">Leave chat</button>
+                <button id="reportRandomPeerBtn" class="btn btn-danger">Report</button>
+              </div>
+              <div id="randomChatEndPanel" hidden>
+                <p class="muted">The anonymous chat has ended. Share your username with this person?</p>
+                <button id="shareRandomUsernameBtn" class="btn btn-primary">Share my username</button>
+                <button id="keepRandomAnonymousBtn" class="btn btn-secondary">Keep it anonymous</button>
+                <p id="randomShareStatus" class="socialStatus" role="status"></p>
+              </div>
+            </div>
+          </section>
+          <section id="connectionsSection" class="socialCard">
+            <h2>Friends</h2>
+            <p class="muted">Open a friend to continue in a private encrypted conversation.</p>
+            <div id="connectionsList" class="socialList"></div>
+          </section>
+        </div>
+        <section id="directConversationView" class="socialCard" hidden>
+          <div class="chatHeader">
+            <button id="backToChatsBtn" class="btn btn-secondary" type="button" aria-label="Back to chats">←</button>
+            <div>
+              <h2 id="chatScreenTitle">Conversation</h2>
+              <p id="chatPeerLabel" class="muted">Choose a connection to open an encrypted chat.</p>
+            </div>
+          </div>
+          <p id="chatKeyFingerprint" class="muted"></p>
+          <div id="chatMessages" class="chatMessages" aria-live="polite"></div>
+          <div class="socialRow">
+            <input id="chatMessageInput" type="text" maxlength="3500" placeholder="Write an encrypted message…" aria-label="Encrypted chat message" disabled />
+            <button id="sendChatMessageBtn" class="btn btn-primary" disabled>Send</button>
+          </div>
+          <div class="socialRow" style="margin-top:12px">
+            <button id="blockChatPeerBtn" class="btn btn-danger" disabled>Block</button>
+            <button id="reportChatPeerBtn" class="btn btn-danger" disabled>Report</button>
+          </div>
+          <p class="muted">Messages are encrypted in this browser before upload. Your private key stays on this device; clearing browser data may make old messages unreadable. Report evidence is shared only when attached.</p>
+        </section>
+        <section class="socialCard">
+          <h2>Safety &amp; account status</h2>
+          <p id="moderationStatus" class="muted">Reports are reviewed; a report is not proof by itself. Five reports pause random matching for 30 days; more than ten reports can ban an account.</p>
+          <div id="appealPanel" hidden>
+            <h3>Appeal a restriction</h3>
+            <p class="muted">Explain why you believe the decision should be reviewed. Reinstatement is not guaranteed.</p>
+            <textarea id="appealMessage" maxlength="4000" aria-label="Appeal explanation" placeholder="Your explanation"></textarea>
+            <div class="socialRow">
+              <button id="sendAppealBtn" class="btn btn-primary">Submit in-app appeal</button>
+              <button id="emailAppealBtn" class="btn btn-secondary">Email support</button>
+            </div>
+            <div id="appealStatus" class="socialStatus" role="status"></div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <dialog id="reportDialog" class="reportDialog">
+      <h2>Report a user</h2>
+      <p class="muted">Please include the specific behavior that made you uncomfortable. Reports are reviewed before action is taken.</p>
+      <label for="reportCategoryInput">Report category</label>
+      <select id="reportCategoryInput">
+        <option value="harassment">Harassment</option>
+        <option value="spam">Spam</option>
+        <option value="threats">Threats</option>
+        <option value="impersonation">Impersonation</option>
+        <option value="other">Other</option>
+      </select>
+      <label for="reportReasonInput">What happened?</label>
+      <textarea id="reportReasonInput" maxlength="3000" required></textarea>
+      <label for="reportEvidenceInput">Screenshots or other evidence (optional)</label>
+      <input id="reportEvidenceInput" type="file" accept="image/*" multiple />
+      <div id="reportSubmitStatus" class="socialStatus" role="status"></div>
+      <div class="socialRow">
+        <button id="submitReportBtn" class="btn btn-danger">Submit report</button>
+        <button id="cancelReportBtn" class="btn btn-secondary">Cancel</button>
+      </div>
+    </dialog>
+
+  </main>
 
   <button id="backBtn" class="btn btn-secondary" onclick="goBack()">⬅ Back</button>
 
@@ -406,8 +1005,11 @@
     import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail,
       onAuthStateChanged, setPersistence, inMemoryPersistence, signOut }
       from "https://www.gstatic.com/firebasejs/12.7.0/firebase-auth.js";
-    import { getFirestore, doc, setDoc, getDoc, deleteDoc, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
+    import { getFirestore, doc, setDoc, getDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
     import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-storage.js";
+    import { initializeSocialFeatures } from "./social.js";
+    import { initializeRoomTools } from "./room-tools.js";
+    import { getDailyAffirmation } from "./affirmations.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyA6pnGyG_S5WLz5JNW4hDcgAVto6YtdRWo",
@@ -568,7 +1170,7 @@
     ];
 
     const state = { history:["loginPage"], currentPage:"loginPage", quizIndex:0, quizScore:0 };
-    const protectedPages = new Set(["openingPage","quizPage","resultPage","introPage","colorPage","colorAnalysisPage","roomIntroPage","roomAnalysisPage","profilePage"]);
+    const protectedPages = new Set(["openingPage","mainMenuPage","searchPage","chatsPage","quizPage","resultPage","introPage","colorPage","colorAnalysisPage","roomIntroPage","roomAnalysisPage","profilePage"]);
     let currentTopThree = [];
 
     /* ---- colour blending: turns a mixture of archetypes into ONE weighted palette ---- */
@@ -730,12 +1332,25 @@
       if (!target) return;
       target.classList.add("active");
       target.querySelectorAll(".rise").forEach(el=>{ el.style.animation="none"; void el.offsetWidth; el.style.animation=""; });
+      const heading = target.querySelector("h1");
+      if (heading){
+        heading.setAttribute("tabindex","-1");
+        requestAnimationFrame(()=>heading.focus({preventScroll:true}));
+      }
       state.currentPage = pageId;
       if (!fromBack){ if (state.history[state.history.length-1] !== pageId) state.history.push(pageId); }
       else { state.history[state.history.length-1] = pageId; }
       updateBackButton();
+      $("appNavigation").hidden = !auth.currentUser;
+      document.body.classList.toggle("hasAppNavigation", Boolean(auth.currentUser));
+      const navigationPage = pageId === "roomIntroPage" || pageId === "roomAnalysisPage" ? "profilePage" : pageId;
+      document.querySelectorAll("#appNavigation [data-go]").forEach(link=>{
+        if (link.dataset.go === navigationPage) link.setAttribute("aria-current","page");
+        else link.removeAttribute("aria-current");
+      });
       sessionStorage.setItem("currentPage", pageId);
       renderPageContent(pageId);
+      document.dispatchEvent(new CustomEvent("mawaesu-page-change", { detail:pageId }));
     }
 
     function goBack(){
@@ -983,7 +1598,7 @@
         </div>` : "";
     }
 
-    const profileState = { bio:"", avatar:null, username:"" };
+    const profileState = { bio:"", avatar:null, username:"", displayName:"" };
     // While true, onAuthStateChanged ignores transitions — used during signup so the brief
     // auto-login-then-signOut Firebase does internally never flashes the profile/opening page.
     let suppressAuthNav = false;
@@ -997,7 +1612,12 @@
       else { img.removeAttribute("src"); img.classList.remove("has-img"); placeholder.classList.remove("hidden"); }
     }
 
-    function syncProfileToLocal(){ profileState.bio = $("profileBio")?.value || profileState.bio; saveProfileLocal(); }
+    function syncProfileToLocal(){
+      profileState.displayName = $("profileDisplayName")?.value.trim() || "";
+      profileState.bio = $("profileBio")?.value ?? profileState.bio;
+      profileState.username = $("profileUsername")?.value.trim() || "";
+      saveProfileLocal();
+    }
 
     function renderProfilePage(){
       loadProfileLocal();
@@ -1010,12 +1630,26 @@
       $("displaySeasonFull").innerHTML = `<strong>${palette.title}</strong><br>${palette.note}`;
       $("displayPaletteFull").innerHTML = palette.core.map(c=>`<div class="swatch" style="background:${c}"></div>`).join("");
       $("displayRoomFull").innerHTML = topThree.length ? `<p><strong>${topThree[0].name}</strong><br>${topThree[0].desc}</p>` : "No room guidance available yet.";
+      $("dailyAffirmationText").textContent = auth.currentUser
+        ? getDailyAffirmation(auth.currentUser.uid, topThree[0]?.name || "")
+        : "Sign in to receive today's affirmation.";
+      $("affirmationArchetype").textContent = topThree[0]?.name ? `Chosen for ${topThree[0].name}` : "A gentle reminder for today";
+      $("profileDisplayName").value = profileState.displayName || "";
+      $("displayProfileName").textContent = profileState.displayName || "Your profile";
       $("profileBio").value = profileState.bio || "";
+      $("profileUsername").value = profileState.username || "";
       $("displayUsername").textContent = profileState.username ? `@${profileState.username}` : "";
       renderPfp();
     }
 
+    function renderMainMenu(){
+      $("mainMenuStatus").textContent = profileState.username
+        ? `Welcome back, @${profileState.username}.`
+        : "Welcome to MAWAESU. Add a username on your profile to connect with other members.";
+    }
+
     function renderPageContent(pageId){
+      if (pageId === "mainMenuPage") renderMainMenu();
       if (pageId === "resultPage"){
         // Reachable two ways: fresh off the quiz (finishQuiz already rendered it) or a returning
         // user tapping "View full archetype" from their profile — render from storage either way.
@@ -1034,12 +1668,29 @@
       if (!auth.currentUser) return;
       const ref = doc(db, "users", auth.currentUser.uid);
       const snap = await getDoc(ref);
+      Object.assign(profileState, { bio:"", avatar:null, username:"", displayName:"" });
       if (snap.exists()){
         const data = snap.data();
-        if (data.profileState){ Object.assign(profileState, data.profileState); saveProfileLocal(); }
-        if (data.archetypeTopThree) localStorage.setItem("archetypeTopThree", JSON.stringify(data.archetypeTopThree));
-        if (data.archetypeScore) localStorage.setItem("archetypeScore", String(data.archetypeScore));
+        if (data.profileState) Object.assign(profileState, data.profileState);
+        if (typeof data.bio === "string") profileState.bio = data.bio;
+        if (typeof data.username === "string") profileState.username = data.username;
+        if (typeof data.name === "string") profileState.displayName = data.name;
+        if (typeof data.avatarUrl === "string") profileState.avatar = data.avatarUrl;
+        if (Array.isArray(data.archetypeTopThree)) {
+          localStorage.setItem("archetypeTopThree", JSON.stringify(data.archetypeTopThree));
+        } else {
+          localStorage.removeItem("archetypeTopThree");
+        }
+        if (data.archetypeScore !== null && data.archetypeScore !== undefined) {
+          localStorage.setItem("archetypeScore", String(data.archetypeScore));
+        } else {
+          localStorage.removeItem("archetypeScore");
+        }
+      } else {
+        localStorage.removeItem("archetypeTopThree");
+        localStorage.removeItem("archetypeScore");
       }
+      saveProfileLocal();
     }
 
     function hasSavedResult(){
@@ -1050,7 +1701,8 @@
       if (!auth.currentUser) return;
       syncProfileToLocal();
       await setDoc(doc(db, "users", auth.currentUser.uid), {
-        bio: profileState.bio, profileState,
+        name: profileState.displayName || profileState.username,
+        bio: profileState.bio, username: profileState.username, profileState,
         archetypeTopThree: JSON.parse(localStorage.getItem("archetypeTopThree")||"[]"),
         archetypeScore: localStorage.getItem("archetypeScore")||null,
         updatedAt: serverTimestamp()
@@ -1064,6 +1716,9 @@
       const url = await getDownloadURL(fileRef);
       profileState.avatar = url; saveProfileLocal(); renderPfp();
       await setDoc(doc(db, "users", auth.currentUser.uid), { avatarUrl:url, updatedAt: serverTimestamp() }, { merge:true });
+      if (isValidUsername(profileState.username)) {
+        await window.mawaesuSocialFeatures.publishProfile();
+      }
     }
 
     bindClick("loginBtn", async ()=>{
@@ -1074,36 +1729,17 @@
     });
     bindClick("signupBtn", async ()=>{
       const name = $("signupName").value.trim();
-      const usernameRaw = $("signupUsername").value.trim();
-      const username = usernameRaw.toLowerCase();
       const email = $("signupEmail").value.trim();
       const password = $("signupPassword").value;
-      if (!name || !usernameRaw || !email || !password) return alert("All fields are required.");
-      if (!isValidUsername(usernameRaw)) return alert("Username must be 3–20 characters: letters, numbers, underscores or periods only.");
+      if (!name || !email || !password) return alert("All fields are required.");
       if (!isValidPassword(password)) return alert("Password too weak. Use 8+ chars with uppercase, lowercase, number, and special character.");
-
-      const unameRef = doc(db, "usernames", username);
-      try {
-        const existing = await getDoc(unameRef);
-        if (existing.exists()) return alert(`@${username} is already taken — try another username.`);
-      } catch (err) { return alert("Couldn't verify username availability: " + err.message); }
 
       suppressAuthNav = true;
       try {
         const cred = await createUserWithEmailAndPassword(auth, email, password);
-        try {
-          // Reserve the username atomically — if someone grabbed it in the split second since
-          // the check above, this transaction fails instead of silently double-assigning it.
-          await runTransaction(db, async tx=>{
-            const unameSnap = await tx.get(unameRef);
-            if (unameSnap.exists()) throw new Error("taken");
-            tx.set(unameRef, { uid: cred.user.uid, username });
-          });
-        } catch (unameErr) {
-          alert(`@${username} was just taken by someone else — you're signed up, but please pick a different username next time you edit your profile.`);
-        }
-        profileState.username = usernameRaw; saveProfileLocal();
-        await setDoc(doc(db, "users", cred.user.uid), { name, email, username: usernameRaw, createdAt: serverTimestamp(), profileState }, { merge:true });
+        profileState.username = "";
+        saveProfileLocal();
+        await setDoc(doc(db, "users", cred.user.uid), { name, email, username: "", createdAt: serverTimestamp(), profileState }, { merge:true });
         // The account is now created, but we deliberately sign it back out: the profile/results
         // reveal should only ever appear right after someone actually types their email and
         // password on the login screen, never as an automatic side effect of signing up.
@@ -1127,24 +1763,126 @@
     bindClick("nextStepBtn", ()=>showPage("roomIntroPage"));
     bindClick("roomAnalysisBtn", ()=>showPage("roomAnalysisPage"));
     bindClick("goToProfileBtn", ()=>showPage("profilePage"));
+    bindClick("refreshAffirmationBtn", ()=>{
+      const topThree = getStoredTopThree();
+      $("dailyAffirmationText").textContent = auth.currentUser
+        ? getDailyAffirmation(auth.currentUser.uid, topThree[0]?.name || "")
+        : "Sign in to receive today's affirmation.";
+    });
+    document.querySelectorAll("[data-menu-action]").forEach(button=>button.addEventListener("click", ()=>{
+      const action = button.dataset.menuAction;
+      if (action === "quiz"){
+        state.quizIndex=0; state.quizScore=0; updateProgress(); renderQuiz(); showPage("quizPage");
+      } else if (action === "results"){
+        if (hasSavedResult()) showPage("resultPage");
+        else $("mainMenuStatus").textContent = "Take the quiz to create your personalized results.";
+      } else if (action === "room") showPage("roomAnalysisPage");
+      else if (action === "affirmation"){
+        showPage("profilePage");
+        $("dailyAffirmationText").scrollIntoView({behavior:"smooth",block:"center"});
+      } else if (action === "people") showPage("searchPage");
+      else if (action === "notes") showPage("mainMenuPage");
+    }));
 
     // data-go links only make sense while signed in for the app pages, and should never let a
     // signed-out visitor tunnel into a protected page via a stray click.
-    document.querySelectorAll("[data-go]").forEach(el=>el.addEventListener("click", ()=>showPage(el.dataset.go)));
+    document.querySelectorAll("[data-go]").forEach(el=>el.addEventListener("click", event=>{
+      event.preventDefault();
+      showPage(el.dataset.go);
+    }));
+    bindClick("skipToMainContent", event=>{
+      event.preventDefault();
+      showPage(auth.currentUser ? "mainMenuPage" : "loginPage");
+    });
 
     $("profileBio")?.addEventListener("input", ()=>{ profileState.bio = $("profileBio").value; saveProfileLocal(); });
+    $("profileDisplayName")?.addEventListener("input", ()=>{
+      profileState.displayName = $("profileDisplayName").value.trim();
+      $("displayProfileName").textContent = profileState.displayName || "Your profile";
+      saveProfileLocal();
+    });
 
     $("uploadAvatar")?.addEventListener("change", async e=>{
       const file = e.target.files?.[0]; if (!file) return;
       const reader = new FileReader();
       reader.onload = ()=>{ profileState.avatar = reader.result; saveProfileLocal(); renderPfp(); };
       reader.readAsDataURL(file);
-      try { await uploadAvatarToFirebase(file); } catch (err) { console.warn(err); }
+      const status = $("profileSaveStatus");
+      status.textContent = "Uploading your profile photo…";
+      try {
+        await uploadAvatarToFirebase(file);
+        status.textContent = "Your profile photo is saved.";
+      } catch (err) {
+        console.error("Profile photo could not be saved.", err);
+        status.textContent = `Profile photo could not be saved: ${err.message}`;
+        status.style.color = "#a63c34";
+      }
     });
 
-    bindClick("saveProfileBtn", async ()=>{ await saveProfileSync(); alert("Profile saved."); });
+    bindClick("saveProfileBtn", async ()=>{
+      const button = $("saveProfileBtn");
+      const status = $("profileSaveStatus");
+      let communityStatus = "";
+      const username = $("profileUsername").value.trim();
+      if (!isValidUsername(username)) {
+        status.textContent = "Choose a username with 3–20 letters, numbers, periods, or underscores before saving.";
+        $("profileUsername").focus();
+        return;
+      }
+      button.disabled = true;
+      status.style.color = "";
+      status.textContent = "Saving your profile…";
+      try {
+        await saveProfileSync();
+        try {
+          await window.mawaesuSocialFeatures.publishProfile();
+          communityStatus = `Welcome back${profileState.username ? `, @${profileState.username}` : ""}. Your community profile is ready.`;
+        } catch (publishError) {
+          console.error("Community profile could not be published.", publishError);
+          communityStatus = `Your profile is saved. Community setup needs attention: ${publishError.message}`;
+        }
+        status.textContent = "Profile saved. Taking you to your feature menu…";
+        showPage("mainMenuPage");
+        $("mainMenuStatus").textContent = communityStatus;
+      } catch (err) {
+        status.textContent = `Could not save your profile: ${err.message}`;
+        status.style.color = "#ff9b9b";
+      } finally {
+        button.disabled = false;
+      }
+    });
 
     bindClick("signOutBtn", async ()=>{ try { await signOut(auth); } catch (err) { alert(err.message); } });
+    bindClick("deactivateAccountBtn", async event=>{
+      const button = event.currentTarget;
+      if (!confirm("Deactivate your account? Your profile will be hidden and access paused. Signing in again will reactivate it.")) return;
+      button.disabled = true;
+      $("accountActionStatus").textContent = "Deactivating your account…";
+      try {
+        await window.mawaesuSocialFeatures.deactivateAccount();
+        await signOut(auth);
+      } catch (error) {
+        $("accountActionStatus").textContent = `Could not deactivate the account: ${error.message}`;
+        button.disabled = false;
+      }
+    });
+    bindClick("deleteAccountBtn", async event=>{
+      const button = event.currentTarget;
+      if (!confirm("Permanently delete your account and your own notes? This cannot be undone. Reports already submitted may be retained for safety review.")) return;
+      button.disabled = true;
+      $("accountActionStatus").textContent = "Deleting your account and notes…";
+      try {
+        await window.mawaesuSocialFeatures.deleteAccount();
+        ["profileState", "archetypeTopThree", "archetypeScore", "roomPlan"].forEach(key => localStorage.removeItem(key));
+        $("loginEmail").value = "";
+        $("loginPassword").value = "";
+        Object.assign(profileState, { bio: "", username: "", avatar: null, displayName: "" });
+        await signOut(auth);
+      } catch (error) {
+        $("accountActionStatus").textContent = `Could not delete the account: ${error.message}`;
+        button.disabled = false;
+      }
+    });
 
     bindClick("deleteDataBtn", async ()=>{
       if (!confirm("This clears your saved archetype, colour and room results so you can retake the test. Your account and profile stay intact. Continue?")) return;
@@ -1164,10 +1902,35 @@
       // "profilePage" entry can't be reached via Back after signing in/out.
       state.history = [];
       if (user){
+        let reactivationError = "";
+        let accountStatusError = "";
+        try {
+          const accountStatus = await getDoc(doc(db, "accountStatuses", user.uid));
+          if (accountStatus.exists() && accountStatus.data().deactivated === true) {
+            try {
+              await window.mawaesuSocialFeatures.reactivateAccount();
+            } catch (error) {
+              console.error("Could not reactivate the account.", error);
+              reactivationError = error.message;
+            }
+          }
+        } catch (error) {
+          console.error("Could not load account status.", error);
+          accountStatusError = error.message;
+        }
         await loadProfileData();
-        // Returning user with a saved test result → straight to their profile/results.
-        // First-time or no saved result → the usual opening/quiz prompt.
-        showPage(hasSavedResult() ? "profilePage" : "openingPage");
+        // A saved community profile is enough to land on the full feature menu;
+        // the self-discovery quiz remains optional for social features.
+        const destination = hasSavedResult() || profileState.username
+          ? "mainMenuPage"
+          : "openingPage";
+        showPage(destination);
+        if (accountStatusError || reactivationError) {
+          const status = destination === "mainMenuPage" ? $("mainMenuStatus") : $("openingStatus");
+          status.textContent = accountStatusError
+            ? `Your account status could not be checked: ${accountStatusError}`
+            : `Your account could not be reactivated: ${reactivationError}`;
+        }
       } else {
         setAura(null);
         showPage("loginPage");
@@ -1176,6 +1939,8 @@
 
     window.showPage = showPage;
     window.goBack = goBack;
+    window.mawaesuSocialFeatures = initializeSocialFeatures({ app, auth, db, storage });
+    window.mawaesuRoomTools = initializeRoomTools({ app, auth, db });
     loadProfileLocal();
     setAura(null);
   </script>

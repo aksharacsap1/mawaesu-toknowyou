@@ -1,0 +1,377 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function accountEnabled(uid) {
+      return !exists(/databases/$(database)/documents/accountStatuses/$(uid))
+        || get(/databases/$(database)/documents/accountStatuses/$(uid)).data.deactivated != true;
+    }
+
+    function activeAccount(uid) {
+      return (!exists(/databases/$(database)/documents/moderationCounters/$(uid))
+        || get(/databases/$(database)/documents/moderationCounters/$(uid)).data.banned != true)
+        && accountEnabled(uid);
+    }
+
+    function connected(a, b) {
+      return exists(/databases/$(database)/documents/connections/$(a)/users/$(b))
+        && exists(/databases/$(database)/documents/connections/$(b)/users/$(a))
+        && get(/databases/$(database)/documents/connections/$(a)/users/$(b)).data.status == 'accepted'
+        && get(/databases/$(database)/documents/connections/$(b)/users/$(a)).data.status == 'accepted';
+    }
+
+    function blocked(a, b) {
+      return exists(/databases/$(database)/documents/blocks/$(a)/users/$(b))
+        || exists(/databases/$(database)/documents/blocks/$(b)/users/$(a));
+    }
+
+    function noteExists(noteId) {
+      return exists(/databases/$(database)/documents/publicNotes/$(noteId));
+    }
+
+    function pollExists(noteId, pollId) {
+      return exists(/databases/$(database)/documents/publicNotes/$(noteId)/polls/$(pollId));
+    }
+
+    function validPollVote(noteId, pollId, data) {
+      let poll = get(/databases/$(database)/documents/publicNotes/$(noteId)/polls/$(pollId));
+      return pollExists(noteId, pollId)
+        && poll.data.options is list
+        && data.keys().hasOnly(['authorUid', 'optionIndex', 'createdAt'])
+        && data.authorUid == request.auth.uid
+        && data.optionIndex is int
+        && data.optionIndex >= 0
+        && data.optionIndex < poll.data.options.size();
+    }
+
+    function canReadChat(chatId) {
+      let chat = get(/databases/$(database)/documents/directChats/$(chatId));
+      return signedIn()
+        && activeAccount(request.auth.uid)
+        && chat.data.participantUids is list
+        && chat.data.participantUids.size() == 2
+        && activeAccount(chat.data.participantUids[0])
+        && activeAccount(chat.data.participantUids[1])
+        && request.auth.uid in chat.data.participantUids
+        && connected(chat.data.participantUids[0], chat.data.participantUids[1])
+        && !blocked(chat.data.participantUids[0], chat.data.participantUids[1]);
+    }
+
+    function validNote(data) {
+      return data.keys().hasOnly([
+          'authorUid', 'title', 'text', 'createdAt', 'updatedAt', 'visibility', 'tags',
+          'mediaUrl', 'mediaType', 'pollMetadata'
+        ])
+        && data.authorUid == request.auth.uid
+        && (!('title' in data.keys()) || (data.title is string && data.title.size() <= 160))
+        && data.text is string
+        && data.text.size() <= 5000
+        && (
+          !('mediaUrl' in data.keys())
+          || (
+            data.mediaUrl is string
+            && data.mediaUrl.size() <= 2048
+            && data.mediaUrl.matches('https://.+')
+            && 'mediaType' in data.keys()
+            && data.mediaType in [
+              'image/jpeg', 'image/png', 'image/webp',
+              'video/mp4', 'video/webm', 'video/quicktime'
+            ]
+          )
+        )
+        && (
+          !('mediaType' in data.keys())
+          || (
+            'mediaUrl' in data.keys()
+            && data.mediaType in [
+              'image/jpeg', 'image/png', 'image/webp',
+              'video/mp4', 'video/webm', 'video/quicktime'
+            ]
+          )
+        )
+        && (
+          !('pollMetadata' in data.keys())
+          || (
+            data.pollMetadata is map
+            && data.pollMetadata.keys().hasOnly([
+              'question', 'options', 'endsAt', 'allowMultiple'
+            ])
+            && data.pollMetadata.question is string
+            && data.pollMetadata.question.size() > 0
+            && data.pollMetadata.question.size() <= 500
+            && data.pollMetadata.options is list
+            && data.pollMetadata.options.size() >= 2
+            && data.pollMetadata.options.size() <= 10
+            && (!('endsAt' in data.pollMetadata.keys()) || data.pollMetadata.endsAt is timestamp)
+            && (!('allowMultiple' in data.pollMetadata.keys())
+              || data.pollMetadata.allowMultiple is bool)
+          )
+        );
+    }
+
+    match /users/{uid} {
+      allow read: if isSelf(uid);
+      allow create: if isSelf(uid)
+        && request.resource.data.keys().hasOnly([
+          'name', 'email', 'username', 'createdAt', 'profileState', 'avatarUrl',
+          'bio', 'archetypeTopThree', 'archetypeScore', 'updatedAt'
+        ]);
+      allow update: if isSelf(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'email', 'username', 'profileState', 'avatarUrl', 'bio',
+          'archetypeTopThree', 'archetypeScore', 'updatedAt'
+        ]);
+      allow delete: if false;
+
+      match /blocks/{otherUid} {
+        allow read, write: if false;
+      }
+      match /connections/{otherUid} {
+        allow read, write: if false;
+      }
+
+      match /roomPlans/{planId} {
+        allow read: if isSelf(uid);
+        allow create: if isSelf(uid)
+          && request.resource.data.keys().hasOnly([
+            'archetypeName', 'dailyMinutes', 'observations',
+            'steps', 'schedule', 'completedTaskIds', 'disclaimer', 'createdAt', 'updatedAt'
+          ])
+          && request.resource.data.archetypeName is string
+          && request.resource.data.archetypeName.size() <= 120
+          && request.resource.data.dailyMinutes is int
+          && request.resource.data.dailyMinutes >= 5
+          && request.resource.data.dailyMinutes <= 480
+          && request.resource.data.observations is list
+          && request.resource.data.observations.size() <= 12
+          && request.resource.data.steps is list
+          && request.resource.data.steps.size() <= 12
+          && request.resource.data.schedule is list
+          && request.resource.data.schedule.size() <= 21
+          && request.resource.data.completedTaskIds is list
+          && request.resource.data.completedTaskIds.size() == 0
+          && request.resource.data.disclaimer is string
+          && request.resource.data.disclaimer.size() <= 500
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+        allow update: if isSelf(uid)
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['completedTaskIds', 'updatedAt'])
+          && request.resource.data.completedTaskIds is list
+          && request.resource.data.completedTaskIds.size() <= 300
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if isSelf(uid);
+      }
+
+      match /savedNotes/{noteId} {
+        allow read: if isSelf(uid) && activeAccount(uid);
+        allow create, update: if isSelf(uid) && activeAccount(uid)
+          && request.resource.data.keys().hasOnly(['noteId', 'authorUid', 'savedAt'])
+          && request.resource.data.noteId == noteId
+          && request.resource.data.authorUid is string
+          && request.resource.data.savedAt == request.time
+          && noteExists(noteId);
+        allow delete: if isSelf(uid) && activeAccount(uid);
+      }
+    }
+
+    match /publicProfiles/{uid} {
+      allow read: if signedIn() && activeAccount(request.auth.uid)
+        && (!('active' in resource.data.keys()) || resource.data.active == true);
+      allow write: if false;
+    }
+
+    match /accountStatuses/{uid} {
+      allow read: if isSelf(uid);
+      allow write: if false;
+    }
+
+    match /usernames/{username} {
+      allow read: if signedIn() && activeAccount(request.auth.uid);
+      // Signup reserves the normalized username in a transaction from the client.
+      // It may only create its own mapping; only Admin SDK callables may replace it.
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid', 'username'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.username == username
+        && username.matches('^[a-z0-9_.]{3,20}$');
+      allow update, delete: if false;
+    }
+
+    match /connections/{uid}/users/{otherUid} {
+      allow read: if isSelf(uid);
+      allow write: if false;
+    }
+
+    match /blocks/{uid}/users/{otherUid} {
+      allow read, write: if false;
+    }
+
+    match /connectionRequests/{requestId} {
+      allow read: if signedIn() && activeAccount(request.auth.uid)
+        && (resource.data.senderUid == request.auth.uid
+          || resource.data.recipientUid == request.auth.uid);
+      allow write: if false;
+    }
+
+    match /directChats/{chatId} {
+      allow read: if canReadChat(chatId);
+      allow write: if false;
+
+      match /readStates/{uid} {
+        allow read: if isSelf(uid) && canReadChat(chatId);
+        allow create, update: if isSelf(uid) && canReadChat(chatId)
+          && request.resource.data.keys().hasOnly(['lastReadAt'])
+          && request.resource.data.lastReadAt == request.time;
+        allow delete: if false;
+      }
+
+      match /messages/{messageId} {
+        allow read: if canReadChat(chatId);
+        allow create, update, delete: if false;
+      }
+    }
+
+    match /randomRooms/{roomId} {
+      allow read: if signedIn()
+        && activeAccount(request.auth.uid)
+        && exists(/databases/$(database)/documents/randomRooms/$(roomId)/members/$(request.auth.uid))
+        && (
+          (resource.data.status in ['waiting', 'active']
+            && resource.data.expiresAt > request.time)
+          || (resource.data.status == 'closed'
+            && resource.data.cleanupAt > request.time)
+        );
+      allow write: if false;
+
+      match /members/{uid} {
+        allow read, write: if false;
+      }
+      match /messages/{messageId} {
+        allow read: if signedIn()
+          && activeAccount(request.auth.uid)
+          && exists(/databases/$(database)/documents/randomRooms/$(roomId)/members/$(request.auth.uid))
+          && get(/databases/$(database)/documents/randomRooms/$(roomId)).data.status == 'active'
+          && get(/databases/$(database)/documents/randomRooms/$(roomId)).data.expiresAt > request.time;
+        allow write: if false;
+      }
+    }
+
+    match /publicNotes/{noteId} {
+      allow read: if signedIn() && activeAccount(request.auth.uid);
+      allow create: if signedIn() && activeAccount(request.auth.uid) && validNote(request.resource.data);
+      allow update: if signedIn() && activeAccount(request.auth.uid)
+        && resource.data.authorUid == request.auth.uid
+        && validNote(request.resource.data)
+        && request.resource.data.authorUid == resource.data.authorUid;
+      allow delete: if signedIn() && activeAccount(request.auth.uid)
+        && resource.data.authorUid == request.auth.uid;
+
+      match /comments/{commentId} {
+        allow read: if signedIn() && activeAccount(request.auth.uid) && noteExists(noteId);
+        allow create: if signedIn() && activeAccount(request.auth.uid) && noteExists(noteId)
+          && request.resource.data.keys().hasOnly(['authorUid', 'text', 'createdAt'])
+          && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 2000
+          && request.resource.data.createdAt == request.time;
+        allow update: if signedIn() && activeAccount(request.auth.uid) && noteExists(noteId)
+          && resource.data.authorUid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text'])
+          && request.resource.data.text is string
+          && request.resource.data.text.size() <= 2000;
+        allow delete: if signedIn() && activeAccount(request.auth.uid) && noteExists(noteId)
+          && resource.data.authorUid == request.auth.uid;
+      }
+
+      match /reactions/{uid} {
+        allow read: if signedIn() && activeAccount(request.auth.uid) && noteExists(noteId);
+        allow create, update: if isSelf(uid) && activeAccount(uid) && noteExists(noteId)
+          && request.resource.data.keys().hasOnly(['authorUid', 'reaction', 'createdAt'])
+          && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.reaction is string
+          && request.resource.data.reaction.size() <= 32;
+        allow delete: if isSelf(uid) && activeAccount(uid) && noteExists(noteId);
+      }
+
+      match /polls/{pollId} {
+        allow read: if signedIn() && activeAccount(request.auth.uid) && noteExists(noteId);
+        allow create: if signedIn() && activeAccount(request.auth.uid) && noteExists(noteId)
+          && request.resource.data.keys().hasOnly([
+            'authorUid', 'question', 'options', 'createdAt', 'endsAt',
+            'allowMultiple', 'description'
+          ])
+          && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.question is string
+          && request.resource.data.question.size() > 0
+          && request.resource.data.question.size() <= 500
+          && request.resource.data.options is list
+          && request.resource.data.options.size() >= 2
+          && request.resource.data.options.size() <= 10
+          && (!('allowMultiple' in request.resource.data.keys())
+            || request.resource.data.allowMultiple is bool)
+          && (!('description' in request.resource.data.keys())
+            || (request.resource.data.description is string
+              && request.resource.data.description.size() <= 1000));
+        allow update: if signedIn() && activeAccount(request.auth.uid) && noteExists(noteId)
+          && resource.data.authorUid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'question', 'options', 'endsAt', 'allowMultiple', 'description'
+          ]);
+        allow delete: if signedIn() && activeAccount(request.auth.uid) && noteExists(noteId)
+          && resource.data.authorUid == request.auth.uid;
+
+        match /votes/{uid} {
+          allow read: if signedIn() && activeAccount(request.auth.uid)
+            && noteExists(noteId) && pollExists(noteId, pollId);
+          allow create: if isSelf(uid) && activeAccount(uid)
+            && noteExists(noteId)
+            && validPollVote(noteId, pollId, request.resource.data)
+            && request.resource.data.createdAt == request.time;
+          allow update: if isSelf(uid) && activeAccount(uid)
+            && noteExists(noteId)
+            && validPollVote(noteId, pollId, request.resource.data)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['optionIndex'])
+            && request.resource.data.createdAt == resource.data.createdAt;
+          allow delete: if false;
+        }
+      }
+    }
+
+    match /featuredNotes/{featureId} {
+      allow read: if signedIn() && activeAccount(request.auth.uid);
+      allow create: if signedIn() && activeAccount(request.auth.uid)
+        && request.resource.data.keys().hasOnly([
+          'featuredByUserId', 'originalNoteId', 'originalAuthorId',
+          'originalAuthorUsername', 'createdAt'
+        ])
+        && request.resource.data.featuredByUserId == request.auth.uid
+        && request.resource.data.originalNoteId is string
+        && request.resource.data.originalAuthorId is string
+        && request.resource.data.originalAuthorId != request.auth.uid
+        && request.resource.data.originalAuthorUsername is string
+        && request.resource.data.originalAuthorUsername.matches('^[a-z0-9_.]{3,20}$')
+        && request.resource.data.createdAt == request.time
+        && noteExists(request.resource.data.originalNoteId)
+        && get(/databases/$(database)/documents/publicNotes/$(request.resource.data.originalNoteId)).data.authorUid
+          == request.resource.data.originalAuthorId
+        && get(/databases/$(database)/documents/publicProfiles/$(request.resource.data.originalAuthorId)).data.username
+          == request.resource.data.originalAuthorUsername;
+      allow update: if false;
+      allow delete: if signedIn() && activeAccount(request.auth.uid)
+        && resource.data.featuredByUserId == request.auth.uid;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,71 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function activeAccount() {
+      return (!firestore.exists(/databases/(default)/documents/moderationCounters/$(request.auth.uid))
+        || firestore.get(/databases/(default)/documents/moderationCounters/$(request.auth.uid)).data.banned != true)
+        && (!firestore.exists(/databases/(default)/documents/accountStatuses/$(request.auth.uid))
+          || firestore.get(/databases/(default)/documents/accountStatuses/$(request.auth.uid)).data.deactivated != true);
+    }
+
+    function ownsNote(uid, noteId) {
+      return signedIn()
+        && activeAccount()
+        && firestore.exists(/databases/(default)/documents/publicNotes/$(noteId))
+        && firestore.get(/databases/(default)/documents/publicNotes/$(noteId)).data.authorUid == uid;
+    }
+
+    function ownsReport(reportId, uid) {
+      return signedIn()
+        && request.auth.uid == uid
+        && firestore.exists(/databases/(default)/documents/userReports/$(reportId))
+        && firestore.get(/databases/(default)/documents/userReports/$(reportId)).data.reporterUid == uid
+        && firestore.get(/databases/(default)/documents/userReports/$(reportId)).data.status == 'submitted';
+    }
+
+    function ownsEvidenceSlot(reportId, uid, fileName) {
+      return firestore.exists(/databases/(default)/documents/reportEvidenceSlots/$(reportId)/slots/$(fileName))
+        && firestore.get(/databases/(default)/documents/reportEvidenceSlots/$(reportId)/slots/$(fileName)).data.uid == uid;
+    }
+
+    match /reportEvidence/{reportId}/{uid}/{fileName} {
+      allow read: if ownsReport(reportId, uid);
+      allow create: if ownsReport(reportId, uid)
+        && ownsEvidenceSlot(reportId, uid, fileName)
+        && request.resource.size <= 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+      allow update, delete: if false;
+    }
+
+    match /avatars/{uid}/{fileName} {
+      allow read: if signedIn() && activeAccount();
+      allow create: if signedIn()
+        && activeAccount()
+        && request.auth.uid == uid
+        && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+      allow update, delete: if false;
+    }
+
+    match /notes/{uid}/{noteId}/{fileName} {
+      allow read: if signedIn()
+        && activeAccount()
+        && firestore.exists(/databases/(default)/documents/publicNotes/$(noteId));
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && activeAccount()
+        && ownsNote(uid, noteId)
+        && request.resource.size <= 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)|video/(mp4|webm|quicktime)');
+      allow update, delete: if false;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
