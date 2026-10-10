@@ -1888,7 +1888,7 @@
       state.history = [];
       if (user){
         let reactivationError = "";
-        let accountStatusError = "";
+        let accountStatusUnavailable = false;
         try {
           const accountStatus = await getDoc(doc(db, "accountStatuses", user.uid));
           if (accountStatus.exists() && accountStatus.data().deactivated === true) {
@@ -1904,7 +1904,7 @@
           }
         } catch (error) {
           console.error("Could not load account status.", error);
-          accountStatusError = error.message;
+          accountStatusUnavailable = true;
         }
         await loadProfileData();
         // A saved community profile is enough to land on the full feature menu;
@@ -1913,11 +1913,11 @@
           ? "mainMenuPage"
           : "openingPage";
         showPage(destination);
-        if (accountStatusError || reactivationError) {
+        if (accountStatusUnavailable || reactivationError) {
           const status = destination === "mainMenuPage" ? $("mainMenuStatus") : $("openingStatus");
-          status.textContent = accountStatusError
-            ? `Your account status could not be checked: ${accountStatusError}`
-            : `Your account could not be reactivated: ${reactivationError}`;
+          status.textContent = accountStatusUnavailable
+            ? "Safety status could not be checked right now. Browsing is available; protected actions are still checked before they complete."
+            : "Your account could not be reactivated. Please contact support if you still cannot use your account.";
         }
       } else {
         setAura(null);

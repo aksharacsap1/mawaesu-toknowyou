@@ -102,6 +102,16 @@ test("navigation targets exist and community tabs dispatch section loads", () =>
 });
 
 test("unavailable social callables produce an actionable message instead of raw internal errors", () => {
-  assert.match(social, /functions\/internal[\s\S]*?functions\/not-found[\s\S]*?functions\/unavailable/);
-  assert.match(social, /The MAWAESU social service is unavailable/);
+  assert.match(social, /(?:functions\/)?(?:internal\|not-found\|unavailable)/);
+  assert.match(social, /This social feature is temporarily unavailable/);
+  assert.match(social, /\\binternal\\b\|functions/);
+});
+
+test("account-status read failures do not block notes or expose Firebase internals", () => {
+  const publishNote = social.match(/async function publishNote\(\) \{([\s\S]*?)\n  \}/)?.[1];
+  assert.ok(publishNote);
+  assert.doesNotMatch(publishNote, /readAccountStatus/);
+  assert.match(social, /Safety status will appear here when available/);
+  assert.match(html, /Safety status could not be checked right now/);
+  assert.doesNotMatch(html, /Your account status could not be checked: \$\{accountStatusError\}/);
 });

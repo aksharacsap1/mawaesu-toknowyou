@@ -19,7 +19,15 @@ const callableNames = [
 function setStatus(id, message, isError = false) {
   const element = $(id);
   if (!element) return;
-  element.textContent = message;
+  let displayMessage = message;
+  if (/\binternal\b|functions\/(?:not-found|unavailable)/i.test(message)) {
+    displayMessage = "This service is temporarily unavailable. Please try again later.";
+  } else if (/missing or insufficient permissions|permission-denied/i.test(message)) {
+    displayMessage = "This action isn’t available for your account right now. Make sure you’re signed in and try again.";
+  } else if (/failed-precondition.*index|requires an index/i.test(message)) {
+    displayMessage = "This feature is not fully configured yet. Please try again later.";
+  }
+  element.textContent = displayMessage;
   element.style.color = isError ? "#ff9b9b" : "";
 }
 
@@ -76,9 +84,9 @@ export function initializeSocialFeatures({ app, auth, db }) {
     try {
       return await httpsCallable(functions, name)(data);
     } catch (error) {
-      if (["functions/internal", "functions/not-found", "functions/unavailable"].includes(error.code)) {
+      if (/^(?:functions\/)?(?:internal|not-found|unavailable)$/.test(error.code || "")) {
         throw new Error(
-          "The MAWAESU social service is unavailable. Its Firebase backend may not be deployed or enabled yet.",
+          "This social feature is temporarily unavailable. Please try again later.",
           { cause: error }
         );
       }
@@ -212,10 +220,7 @@ export function initializeSocialFeatures({ app, auth, db }) {
     try {
       profileSnapshot = await getDoc(doc(db, "publicProfiles", currentUser.uid));
     } catch (error) {
-      const account = await readAccountStatus();
-      if ((account.banned || account.deactivated) && myProfile.username) {
-        return;
-      }
+      if (error.code === "permission-denied" && myProfile.username) return;
       throw error;
     }
     if (profileSnapshot.exists()) {
@@ -870,7 +875,8 @@ export function initializeSocialFeatures({ app, auth, db }) {
         : status.deactivated ? "Random chat is unavailable while your account is deactivated."
           : status.randomChatSuspended ? "Random chat is paused for your account." : "");
     } catch (error) {
-      setStatus(statusId, `Account status could not be loaded: ${error.message}`, true);
+      console.error("Could not load account status.", error);
+      setStatus(statusId, "Safety status will appear here when available. Protected actions are checked before they complete.");
     }
   }
 
@@ -889,9 +895,6 @@ export function initializeSocialFeatures({ app, auth, db }) {
       return;
     }
     try {
-      const accountStatus = await readAccountStatus();
-      if (accountStatus.banned) throw new Error("Your account is restricted from posting.");
-      if (accountStatus.deactivated) throw new Error("Your account is deactivated. Sign out and sign back in before posting.");
       setStatus("noteComposerStatus", "Publishing…");
       const noteRef = doc(collection(db, "publicNotes"));
       const pollMetadata = question ? { question, options } : null;
