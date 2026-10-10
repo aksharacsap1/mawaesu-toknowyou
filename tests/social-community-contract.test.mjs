@@ -80,3 +80,28 @@ test("notes and reports are text-only and reject media uploads", () => {
   assert.ok(noteRules);
   assert.doesNotMatch(noteRules, /mediaUrl|mediaType/);
 });
+
+test("account status works without a callable and handles partial moderation records", () => {
+  assert.match(social, /getDoc\(doc\(db, "moderationCounters", currentUser\.uid\)\)/);
+  assert.match(social, /getDoc\(doc\(db, "accountStatuses", currentUser\.uid\)\)/);
+  assert.doesNotMatch(social, /httpsCallable\(functions, "getAccountStatus"\)/);
+  assert.match(rules, /match \/moderationCounters\/\{uid\} \{\s*allow read: if isSelf\(uid\);\s*allow write: if false;/);
+  assert.ok(rules.includes("!('banned' in get(/databases/$(database)/documents/moderationCounters/$(uid)).data.keys())"));
+  assert.match(rules, /match \/accountStatuses\/\{uid\} \{[\s\S]*?allow update: if isSelf\(uid\)[\s\S]*?deactivated == false/);
+});
+
+test("navigation targets exist and community tabs dispatch section loads", () => {
+  const pageIds = new Set([...html.matchAll(/<div id="([^"]+)" class="page/g)].map(match => match[1]));
+  const destinations = [...html.matchAll(/data-go="([^"]+)"/g)].map(match => match[1]);
+  for (const destination of destinations) {
+    assert.ok(pageIds.has(destination), `Navigation target ${destination} must exist`);
+  }
+  assert.match(html, /new CustomEvent\("mawaesu-page-change", \{ detail:pageId \}\)/);
+  assert.match(social, /if \(\["mainMenuPage", "searchPage", "chatsPage", "profilePage"\]\.includes\(event\.detail\)\)/);
+  assert.match(html, /const navigationPage = pageId === "roomIntroPage" \|\| pageId === "roomAnalysisPage" \? "profilePage" : pageId/);
+});
+
+test("unavailable social callables produce an actionable message instead of raw internal errors", () => {
+  assert.match(social, /functions\/internal[\s\S]*?functions\/not-found[\s\S]*?functions\/unavailable/);
+  assert.match(social, /The MAWAESU social service is unavailable/);
+});

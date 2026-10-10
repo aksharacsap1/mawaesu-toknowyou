@@ -990,7 +990,7 @@
     import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail,
       onAuthStateChanged, setPersistence, inMemoryPersistence, signOut }
       from "https://www.gstatic.com/firebasejs/12.7.0/firebase-auth.js";
-    import { getFirestore, doc, setDoc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
+    import { getFirestore, doc, getDoc, serverTimestamp, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
     import { initializeSocialFeatures } from "./social.js";
     import { initializeRoomTools } from "./room-tools.js";
     import { getDailyAffirmation } from "./affirmations.js";
@@ -1893,7 +1893,10 @@
           const accountStatus = await getDoc(doc(db, "accountStatuses", user.uid));
           if (accountStatus.exists() && accountStatus.data().deactivated === true) {
             try {
-              await window.mawaesuSocialFeatures.reactivateAccount();
+              await updateDoc(doc(db, "accountStatuses", user.uid), {
+                deactivated: false,
+                updatedAt: serverTimestamp()
+              });
             } catch (error) {
               console.error("Could not reactivate the account.", error);
               reactivationError = error.message;

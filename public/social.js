@@ -9,7 +9,7 @@ import { getAvatarOption } from "./avatars.js";
 
 const $ = id => document.getElementById(id);
 const callableNames = [
-  "updatePublicProfile", "getAccountStatus", "sendConnectionRequest", "respondToConnectionRequest",
+  "updatePublicProfile", "sendConnectionRequest", "respondToConnectionRequest",
   "blockUser", "createDirectChat", "sendDirectMessage", "findRandomChat", "sendRandomChatMessage",
   "leaveRandomChat", "shareRandomUsername", "getRandomChatStatus", "submitUserReport",
   "submitRandomChatReport", "submitModerationAppeal",
@@ -72,7 +72,19 @@ function makeItem(title, detail = "") {
 
 export function initializeSocialFeatures({ app, auth, db }) {
   const functions = getFunctions(app, "us-central1");
-  const callables = Object.fromEntries(callableNames.map(name => [name, httpsCallable(functions, name)]));
+  const callables = Object.fromEntries(callableNames.map(name => [name, async data => {
+    try {
+      return await httpsCallable(functions, name)(data);
+    } catch (error) {
+      if (["functions/internal", "functions/not-found", "functions/unavailable"].includes(error.code)) {
+        throw new Error(
+          "The MAWAESU social service is unavailable. Its Firebase backend may not be deployed or enabled yet.",
+          { cause: error }
+        );
+      }
+      throw error;
+    }
+  }]));
   let currentUser = null;
   let identity = null;
   let myProfile = null;
@@ -99,6 +111,24 @@ export function initializeSocialFeatures({ app, auth, db }) {
   const noteListeners = new Map();
   const profileCache = new Map();
   const chatPreviewListeners = new Map();
+
+  async function readAccountStatus() {
+    if (!currentUser) throw new Error("Sign in to check account status.");
+    const [moderationSnapshot, accountSnapshot] = await Promise.all([
+      getDoc(doc(db, "moderationCounters", currentUser.uid)),
+      getDoc(doc(db, "accountStatuses", currentUser.uid))
+    ]);
+    const moderation = moderationSnapshot.exists() ? moderationSnapshot.data() : {};
+    const account = accountSnapshot.exists() ? accountSnapshot.data() : {};
+    const suspensionTimestamp = moderation.randomChatSuspendedUntil;
+    const suspensionDate = suspensionTimestamp?.toDate?.() || null;
+    return {
+      banned: moderation.banned === true,
+      deactivated: account.deactivated === true,
+      randomChatSuspended: Boolean(suspensionDate && suspensionDate.getTime() > Date.now()),
+      randomChatSuspendedUntil: suspensionDate?.toISOString() || null
+    };
+  }
 
   function stopListener(listener) {
     if (listener) listener();
@@ -182,8 +212,8 @@ export function initializeSocialFeatures({ app, auth, db }) {
     try {
       profileSnapshot = await getDoc(doc(db, "publicProfiles", currentUser.uid));
     } catch (error) {
-      const account = await callables.getAccountStatus({});
-      if (account.data.banned && myProfile.username) {
+      const account = await readAccountStatus();
+      if ((account.banned || account.deactivated) && myProfile.username) {
         return;
       }
       throw error;
@@ -823,12 +853,13 @@ export function initializeSocialFeatures({ app, auth, db }) {
   async function refreshAccountStatus(statusId = "moderationStatus") {
     if (!currentUser) return;
     try {
-      const result = await callables.getAccountStatus({});
-      const status = result.data;
+      const status = await readAccountStatus();
       $("appealPanel").hidden = !status.banned && !status.randomChatSuspended;
       $("startRandomChatBtn").disabled = Boolean(status.banned || status.randomChatSuspended || randomActive);
       if (status.banned) {
         setStatus("moderationStatus", "Your account is banned. You can sign in and submit an appeal for review. Reinstatement is not guaranteed.");
+      } else if (status.deactivated) {
+        setStatus("moderationStatus", "Your account is deactivated. Sign out and sign back in to reactivate it.");
       } else if (status.randomChatSuspended) {
         setStatus("moderationStatus", `Gentle warning: multiple safety reports have temporarily paused random chat until ${new Date(status.randomChatSuspendedUntil).toLocaleString()}. You can appeal this decision.`);
       } else {
@@ -836,7 +867,8 @@ export function initializeSocialFeatures({ app, auth, db }) {
       }
       setStatus("randomEligibility", status.banned
         ? "Random chat is unavailable while your account is banned."
-        : status.randomChatSuspended ? "Random chat is paused for your account." : "");
+        : status.deactivated ? "Random chat is unavailable while your account is deactivated."
+          : status.randomChatSuspended ? "Random chat is paused for your account." : "");
     } catch (error) {
       setStatus(statusId, `Account status could not be loaded: ${error.message}`, true);
     }
@@ -857,6 +889,9 @@ export function initializeSocialFeatures({ app, auth, db }) {
       return;
     }
     try {
+      const accountStatus = await readAccountStatus();
+      if (accountStatus.banned) throw new Error("Your account is restricted from posting.");
+      if (accountStatus.deactivated) throw new Error("Your account is deactivated. Sign out and sign back in before posting.");
       setStatus("noteComposerStatus", "Publishing…");
       const noteRef = doc(collection(db, "publicNotes"));
       const pollMetadata = question ? { question, options } : null;
@@ -881,7 +916,10 @@ export function initializeSocialFeatures({ app, auth, db }) {
       document.querySelectorAll(".pollOptionInput").forEach(input => { input.value = ""; });
       setStatus("noteComposerStatus", "Your note is public.");
     } catch (error) {
-      setStatus("noteComposerStatus", `Could not publish note: ${error.message}`, true);
+      const detail = error.code === "permission-denied"
+        ? "Firestore denied this note. Confirm that your account is active and that the latest Firestore rules have deployed."
+        : error.message;
+      setStatus("noteComposerStatus", `Could not publish note: ${detail}`, true);
     }
   }
 
@@ -1473,7 +1511,7 @@ export function initializeSocialFeatures({ app, auth, db }) {
 
   return {
     publishProfile,
-    getAccountStatus: async () => (await callables.getAccountStatus({})).data,
+    getAccountStatus: readAccountStatus,
     reactivateAccount: () => callables.reactivateAccount({}),
     deactivateAccount: () => callables.deactivateAccount({}),
     deleteAccount: async () => {

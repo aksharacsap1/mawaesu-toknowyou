@@ -11,11 +11,13 @@ service cloud.firestore {
 
     function accountEnabled(uid) {
       return !exists(/databases/$(database)/documents/accountStatuses/$(uid))
+        || !('deactivated' in get(/databases/$(database)/documents/accountStatuses/$(uid)).data.keys())
         || get(/databases/$(database)/documents/accountStatuses/$(uid)).data.deactivated != true;
     }
 
     function activeAccount(uid) {
       return (!exists(/databases/$(database)/documents/moderationCounters/$(uid))
+        || !('banned' in get(/databases/$(database)/documents/moderationCounters/$(uid)).data.keys())
         || get(/databases/$(database)/documents/moderationCounters/$(uid)).data.banned != true)
         && accountEnabled(uid);
     }
@@ -167,6 +169,18 @@ service cloud.firestore {
 
     match /accountStatuses/{uid} {
       allow read: if isSelf(uid);
+      allow update: if isSelf(uid)
+        && resource.data.deactivated == true
+        && request.resource.data.keys().hasOnly(['deactivated', 'updatedAt'])
+        && request.resource.data.deactivated == false
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['deactivated', 'updatedAt']);
+      allow write: if false;
+    }
+
+    match /moderationCounters/{uid} {
+      allow read: if isSelf(uid);
       allow write: if false;
     }
 
@@ -243,7 +257,10 @@ service cloud.firestore {
 
     match /publicNotes/{noteId} {
       allow read: if signedIn() && activeAccount(request.auth.uid);
-      allow create: if signedIn() && activeAccount(request.auth.uid) && validNote(request.resource.data);
+      allow create: if signedIn()
+        && activeAccount(request.auth.uid)
+        && validNote(request.resource.data)
+        && request.resource.data.createdAt == request.time;
       allow update: if signedIn() && activeAccount(request.auth.uid)
         && resource.data.authorUid == request.auth.uid
         && validNote(request.resource.data)
