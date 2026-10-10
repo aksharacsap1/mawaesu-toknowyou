@@ -1,10 +1,9 @@
 "use strict";
 
 const crypto = require("node:crypto");
-const { initializeApp, getApp } = require("firebase-admin/app");
+const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
-const { getStorage } = require("firebase-admin/storage");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 
 initializeApp();
@@ -217,16 +216,16 @@ async function assertPairAllowed(tx, uidA, uidB) {
 exports.updatePublicProfile = onCall({ region: REGION }, async (request) => {
   const uid = requireAuth(request);
   const data = inputObject(request.data);
-  onlyKeys(data, ["username", "displayName", "bio", "avatarUrl", "encryptionPublicKey"]);
+  onlyKeys(data, ["username", "displayName", "bio", "avatarId", "encryptionPublicKey"]);
   const username = stringField(data, "username", 3, 20).toLowerCase();
   if (!/^[a-z0-9_.]{3,20}$/.test(username)) {
     fail("invalid-argument", "Username may contain only letters, numbers, underscores, and periods.");
   }
   const displayName = stringField(data, "displayName", 1, 60);
   const bio = optionalString(data, "bio", 280);
-  const avatarUrl = optionalString(data, "avatarUrl", 2048);
-  if (avatarUrl && !/^https:\/\//i.test(avatarUrl)) {
-    fail("invalid-argument", "avatarUrl must use HTTPS.");
+  const avatarId = data.avatarId === undefined ? "leaf" : stringField(data, "avatarId", 1, 20);
+  if (!["leaf", "bloom", "sun", "moon", "wave", "moss", "star", "flower"].includes(avatarId)) {
+    fail("invalid-argument", "Choose one of the available illustrated avatars.");
   }
   const encryptionPublicKey = validatePublicJwk(data.encryptionPublicKey);
   const profileRef = db.collection("publicProfiles").doc(uid);
@@ -251,7 +250,8 @@ exports.updatePublicProfile = onCall({ region: REGION }, async (request) => {
       username,
       displayName,
       bio,
-      avatarUrl,
+      avatarId,
+      avatarUrl: FieldValue.delete(),
       active: true,
       updatedAt: FieldValue.serverTimestamp(),
     };
@@ -814,15 +814,9 @@ exports.submitUserReport = onCall({ region: REGION }, async (request) => {
       description,
       status: "submitted",
       createdAt: FieldValue.serverTimestamp(),
-      evidencePrefix: `reportEvidence/${reportId}/${uid}/`,
     });
   });
-  return {
-    reportId,
-    evidencePrefix: `reportEvidence/${reportId}/${uid}/`,
-    evidenceLimit: 5,
-    evidenceMaxBytes: 10 * 1024 * 1024,
-  };
+  return { reportId };
 });
 
 exports.submitRandomChatReport = onCall({ region: REGION }, async (request) => {
@@ -886,48 +880,11 @@ exports.submitRandomChatReport = onCall({ region: REGION }, async (request) => {
       description,
       status: "submitted",
       createdAt: FieldValue.serverTimestamp(),
-      evidencePrefix: `reportEvidence/${reportId}/${uid}/`,
     });
     return reportId;
   });
 
-  return {
-    reportId: reportResult,
-    evidencePrefix: `reportEvidence/${reportResult}/${uid}/`,
-    evidenceLimit: 5,
-    evidenceMaxBytes: 10 * 1024 * 1024,
-  };
-});
-
-exports.reserveReportEvidenceSlot = onCall({ region: REGION }, async (request) => {
-  const uid = requireAuth(request);
-  const data = inputObject(request.data);
-  onlyKeys(data, ["reportId"]);
-  const reportId = documentId(data, "reportId");
-  const slotId = crypto.randomUUID();
-  const reportRef = db.collection("userReports").doc(reportId);
-  const slotsRef = db.collection("reportEvidenceSlots").doc(reportId).collection("slots");
-  await consumeRateLimit(uid, "reportEvidenceSlot", 5, DAY_MS);
-  await db.runTransaction(async (tx) => {
-    const [report, slots] = await Promise.all([
-      tx.get(reportRef),
-      tx.get(slotsRef.limit(5)),
-    ]);
-    if (!report.exists || report.data().reporterUid !== uid ||
-        report.data().status !== "submitted") {
-      fail("not-found", "Report not found.");
-    }
-    if (slots.size >= 5) fail("resource-exhausted", "A report may include up to five images.");
-    tx.create(slotsRef.doc(slotId), {
-      uid,
-      createdAt: FieldValue.serverTimestamp(),
-    });
-  });
-  return {
-    storagePath: `reportEvidence/${reportId}/${uid}/${slotId}`,
-    maxBytes: 10 * 1024 * 1024,
-    contentTypes: ["image/jpeg", "image/png", "image/webp"],
-  };
+  return { reportId: reportResult };
 });
 
 exports.submitModerationAppeal = onCall({ region: REGION }, async (request) => {
@@ -1117,11 +1074,6 @@ exports.deleteAccount = onCall({ region: REGION, timeoutSeconds: 540 }, async (r
     db.collection("publicProfiles").doc(uid).delete(),
     db.collection("accountStatuses").doc(uid).delete(),
     db.collection("randomMatchQueue").doc(uid).delete(),
-  ]);
-  const bucket = getStorage(getApp()).bucket();
-  await Promise.all([
-    bucket.deleteFiles({ prefix: `avatars/${uid}/` }),
-    bucket.deleteFiles({ prefix: `notes/${uid}/` }),
   ]);
   await getAuth().deleteUser(uid);
   return { deleted: true };

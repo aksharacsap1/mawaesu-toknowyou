@@ -175,11 +175,12 @@
     .profileWrapper2{grid-template-columns:340px 1fr}
     .pfpStage{width:100%;aspect-ratio:1;border-radius:14px;overflow:hidden;position:relative;
       background:radial-gradient(circle at 50% 30%,#fafafa,#ececec);box-shadow:inset 0 0 30px rgba(0,0,0,.06)}
-    .pfpImg{width:100%;height:100%;object-fit:cover;display:none}
-    .pfpImg.has-img{display:block}
-    .pfpPlaceholder{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
-      justify-content:center;gap:8px;color:#999;font-size:.85rem}
-    .pfpPlaceholder.hidden{display:none}
+    .pfpPlaceholder{position:absolute;inset:0;display:flex;align-items:center;
+      justify-content:center;color:#536b50;font-size:clamp(4rem,12vw,7rem)}
+    .avatarChoices{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:10px 0 18px}
+    .avatarChoice{min-height:58px;border:1px solid rgba(56,82,61,.2);border-radius:14px;
+      background:#fffef8;font:inherit;font-size:1.7rem;cursor:pointer}
+    .avatarChoice[aria-pressed="true"]{outline:3px solid #5d8054;outline-offset:2px}
 
     .selectorGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:10px}
     .selectorTile{background:#fff;border-radius:12px;padding:8px;cursor:pointer;
@@ -239,7 +240,6 @@
     .chatHeader h2,.chatHeader p{margin:0 0 4px}
     .chatBubble{align-self:flex-start;max-width:85%;padding:9px 12px;border-radius:14px;background:rgba(255,255,255,.12);white-space:pre-wrap;overflow-wrap:anywhere}
     .chatBubble.mine{align-self:flex-end;background:rgba(255,215,0,.18)}
-    .postMedia{max-width:100%;max-height:360px;border-radius:14px;margin-top:10px}
     .pollOptions{display:grid;gap:8px}
     .reportDialog{width:min(92vw,560px);max-height:90vh;overflow:auto;background:#17121f;color:var(--text);
       border:1px solid var(--border);border-radius:20px;padding:22px}
@@ -348,11 +348,6 @@
     input:focus,textarea:focus,select:focus{
       outline:none;border-color:rgba(216,189,136,.65);
       box-shadow:0 0 0 3px rgba(216,189,136,.12);background:#202a24
-    }
-    input[type="file"]{color:#bdc6bb}
-    input[type="file"]::file-selector-button{
-      margin-right:12px;padding:8px 12px;border:0;border-radius:8px;
-      color:#1b1a15;background:#d8bd88;font:inherit;font-weight:650;cursor:pointer
     }
     .auth-card{max-width:460px;margin-inline:auto;text-align:left}
     .auth-card .eyebrow{display:block}
@@ -469,8 +464,6 @@
     input:focus,textarea:focus,select:focus{
       border-color:#719268;box-shadow:0 0 0 3px rgba(113,146,104,.18);background:#fff
     }
-    input[type="file"]{color:#455848}
-    input[type="file"]::file-selector-button{color:#fff;background:#68855c}
     .auth-switch button,.profileLink{color:#496b43}
     .appNav{
       background:rgba(255,255,249,.96);border:1px solid rgba(56,82,61,.14);
@@ -539,10 +532,9 @@
     .profileTab.active,.profileTab[aria-selected="true"]{border-bottom-color:#5d8054;color:#385a37}
     .profileDisplayName{margin:12px 0 0;text-align:center}
     .profileAvatar{
-      flex:0 0 auto;width:48px;height:48px;object-fit:cover;border-radius:50%;
-      background:#e8eee2;border:1px solid rgba(56,82,61,.15)
+      flex:0 0 auto;width:48px;height:48px;display:grid;place-items:center;
+      border-radius:50%;font-size:1.45rem;border:1px solid rgba(56,82,61,.15)
     }
-    .profileAvatarPlaceholder{padding:4px}
     .profileSearchResult,.publicProfileHeader,.noteByline,.noteComment,.conversationRow{
       display:flex;align-items:flex-start;gap:12px
     }
@@ -670,14 +662,12 @@
         <p id="mainMenuStatus" class="pageStatus" role="status" aria-live="polite"></p>
         <section id="notesSection" class="noteComposer" aria-labelledby="notesHeading">
           <h2 id="notesHeading">Share a note</h2>
-          <p class="muted">Post a thought, photo, video, or poll. Notes and comments are visible to signed-in members.</p>
+          <p class="muted">Post a thought or poll. Notes and comments are visible to signed-in members.</p>
           <input id="newNoteTitle" type="text" maxlength="160" aria-label="Note title (optional)" placeholder="Title (optional)" />
           <textarea id="newNoteText" maxlength="3000" aria-label="Write a public note" placeholder="What is on your mind?"></textarea>
           <details class="postExtras">
-            <summary>Add a photo, video, or poll</summary>
+            <summary>Add a poll</summary>
             <div class="postExtrasContent">
-              <label for="noteMediaInput">Attach a photo or video (optional)</label>
-              <input id="noteMediaInput" type="file" accept="image/*,video/*" />
               <div id="pollComposer" class="socialList">
                 <input id="pollQuestionInput" type="text" maxlength="240" aria-label="Poll question (optional)" placeholder="Poll question (optional)" />
                 <input class="pollOptionInput" type="text" maxlength="120" aria-label="Poll option 1" placeholder="Poll option 1" />
@@ -798,16 +788,12 @@
         <div class="profileWrapper profileWrapper2">
           <div class="polaroid rise d1">
             <div class="pfpStage">
-              <img id="pfpImg" class="pfpImg" alt="" />
-              <div id="pfpPlaceholder" class="pfpPlaceholder">
-                <svg viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="1.3" width="48" height="48"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.5-6 8-6s8 2 8 6"/></svg>
-                <span>Add a photo</span>
-              </div>
+              <div id="pfpPlaceholder" class="pfpPlaceholder" role="img" aria-label="Selected illustrated avatar">🌿</div>
             </div>
             <h2 id="displayProfileName" class="profileDisplayName"></h2>
             <div id="displayUsername" class="usernameTag"></div>
-            <label for="uploadAvatar" class="btn btn-secondary" style="display:block;text-align:center;margin:12px 0">Choose Photo</label>
-            <input type="file" id="uploadAvatar" accept="image/*" style="display:none" />
+            <label id="avatarChoicesLabel">Choose an illustrated avatar</label>
+            <div id="avatarChoices" class="avatarChoices" role="group" aria-labelledby="avatarChoicesLabel"></div>
             <label for="profileDisplayName">Display name</label>
             <input id="profileDisplayName" type="text" maxlength="60" autocomplete="name" placeholder="How should people know you?" />
             <label for="profileBio">Bio</label>
@@ -836,7 +822,7 @@
               <div class="profileFeatureGrid">
                 <button class="btn btn-primary" type="button" data-menu-action="quiz">Take the quiz</button>
                 <button class="btn btn-secondary" type="button" data-menu-action="results">View your results</button>
-                <button class="btn btn-purple" type="button" data-menu-action="room">Room analysis &amp; scan</button>
+                <button class="btn btn-purple" type="button" data-menu-action="room">Room description planner</button>
                 <button class="btn btn-secondary" type="button" data-menu-action="affirmation">Today's affirmation</button>
               </div>
             </section>
@@ -985,10 +971,9 @@
         <option value="impersonation">Impersonation</option>
         <option value="other">Other</option>
       </select>
-      <label for="reportReasonInput">What happened?</label>
-      <textarea id="reportReasonInput" maxlength="3000" required></textarea>
-      <label for="reportEvidenceInput">Screenshots or other evidence (optional)</label>
-      <input id="reportEvidenceInput" type="file" accept="image/*" multiple />
+      <label for="reportReasonInput">What happened? Include exact words, approximate time, or other details that may help review.</label>
+      <textarea id="reportReasonInput" maxlength="4000" required placeholder="Describe what happened. If you can, include the message or behavior that concerned you and when it occurred."></textarea>
+      <p class="muted">Reports currently accept written details only; screenshots are not uploaded or stored.</p>
       <div id="reportSubmitStatus" class="socialStatus" role="status"></div>
       <div class="socialRow">
         <button id="submitReportBtn" class="btn btn-danger">Submit report</button>
@@ -1005,11 +990,11 @@
     import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail,
       onAuthStateChanged, setPersistence, inMemoryPersistence, signOut }
       from "https://www.gstatic.com/firebasejs/12.7.0/firebase-auth.js";
-    import { getFirestore, doc, setDoc, getDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
-    import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-storage.js";
+    import { getFirestore, doc, setDoc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
     import { initializeSocialFeatures } from "./social.js";
     import { initializeRoomTools } from "./room-tools.js";
     import { getDailyAffirmation } from "./affirmations.js";
+    import { AVATAR_OPTIONS, getAvatarOption } from "./avatars.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyA6pnGyG_S5WLz5JNW4hDcgAVto6YtdRWo",
@@ -1024,7 +1009,6 @@
     // from a previously stored browser session.
     await setPersistence(auth, inMemoryPersistence);
     const db = getFirestore(app);
-    const storage = getStorage(app);
 
     const $ = (id) => document.getElementById(id);
     const bindClick = (id, handler) => { const el = $(id); if (el) el.addEventListener("click", handler); };
@@ -1598,24 +1582,34 @@
         </div>` : "";
     }
 
-    const profileState = { bio:"", avatar:null, username:"", displayName:"" };
+    const profileState = { bio:"", avatarId:"leaf", username:"", displayName:"" };
     // While true, onAuthStateChanged ignores transitions — used during signup so the brief
     // auto-login-then-signOut Firebase does internally never flashes the profile/opening page.
     let suppressAuthNav = false;
-    function loadProfileLocal(){ try { Object.assign(profileState, JSON.parse(localStorage.getItem("profileState")||"{}")); } catch {} }
+    function loadProfileLocal(){
+      try { Object.assign(profileState, JSON.parse(localStorage.getItem("profileState")||"{}")); } catch {}
+      delete profileState.avatar;
+      profileState.avatarId = getAvatarOption(profileState.avatarId).id;
+    }
     function saveProfileLocal(){ localStorage.setItem("profileState", JSON.stringify(profileState)); }
 
     function renderPfp(){
-      const img = $("pfpImg"), placeholder = $("pfpPlaceholder");
-      if (!img || !placeholder) return;
-      if (profileState.avatar){ img.src = profileState.avatar; img.classList.add("has-img"); placeholder.classList.add("hidden"); }
-      else { img.removeAttribute("src"); img.classList.remove("has-img"); placeholder.classList.remove("hidden"); }
+      const placeholder = $("pfpPlaceholder");
+      if (!placeholder) return;
+      const avatar = getAvatarOption(profileState.avatarId);
+      placeholder.textContent = avatar.symbol;
+      placeholder.style.backgroundColor = avatar.color;
+      placeholder.setAttribute("aria-label", `${avatar.label} illustrated avatar`);
+      document.querySelectorAll(".avatarChoice").forEach(button => {
+        button.setAttribute("aria-pressed", String(button.dataset.avatarId === avatar.id));
+      });
     }
 
     function syncProfileToLocal(){
       profileState.displayName = $("profileDisplayName")?.value.trim() || "";
       profileState.bio = $("profileBio")?.value ?? profileState.bio;
       profileState.username = $("profileUsername")?.value.trim() || "";
+      delete profileState.avatar;
       saveProfileLocal();
     }
 
@@ -1668,14 +1662,15 @@
       if (!auth.currentUser) return;
       const ref = doc(db, "users", auth.currentUser.uid);
       const snap = await getDoc(ref);
-      Object.assign(profileState, { bio:"", avatar:null, username:"", displayName:"" });
+      Object.assign(profileState, { bio:"", avatarId:"leaf", username:"", displayName:"" });
       if (snap.exists()){
         const data = snap.data();
         if (data.profileState) Object.assign(profileState, data.profileState);
+        delete profileState.avatar;
         if (typeof data.bio === "string") profileState.bio = data.bio;
         if (typeof data.username === "string") profileState.username = data.username;
         if (typeof data.name === "string") profileState.displayName = data.name;
-        if (typeof data.avatarUrl === "string") profileState.avatar = data.avatarUrl;
+        if (typeof data.profileState?.avatarId === "string") profileState.avatarId = data.profileState.avatarId;
         if (Array.isArray(data.archetypeTopThree)) {
           localStorage.setItem("archetypeTopThree", JSON.stringify(data.archetypeTopThree));
         } else {
@@ -1707,18 +1702,6 @@
         archetypeScore: localStorage.getItem("archetypeScore")||null,
         updatedAt: serverTimestamp()
       }, { merge:true });
-    }
-
-    async function uploadAvatarToFirebase(file){
-      if (!auth.currentUser || !file) return;
-      const fileRef = storageRef(storage, `avatars/${auth.currentUser.uid}/${Date.now()}_${file.name}`);
-      await uploadBytes(fileRef, file);
-      const url = await getDownloadURL(fileRef);
-      profileState.avatar = url; saveProfileLocal(); renderPfp();
-      await setDoc(doc(db, "users", auth.currentUser.uid), { avatarUrl:url, updatedAt: serverTimestamp() }, { merge:true });
-      if (isValidUsername(profileState.username)) {
-        await window.mawaesuSocialFeatures.publishProfile();
-      }
     }
 
     bindClick("loginBtn", async ()=>{
@@ -1802,21 +1785,23 @@
       saveProfileLocal();
     });
 
-    $("uploadAvatar")?.addEventListener("change", async e=>{
-      const file = e.target.files?.[0]; if (!file) return;
-      const reader = new FileReader();
-      reader.onload = ()=>{ profileState.avatar = reader.result; saveProfileLocal(); renderPfp(); };
-      reader.readAsDataURL(file);
-      const status = $("profileSaveStatus");
-      status.textContent = "Uploading your profile photo…";
-      try {
-        await uploadAvatarToFirebase(file);
-        status.textContent = "Your profile photo is saved.";
-      } catch (err) {
-        console.error("Profile photo could not be saved.", err);
-        status.textContent = `Profile photo could not be saved: ${err.message}`;
-        status.style.color = "#a63c34";
-      }
+    const avatarChoices = $("avatarChoices");
+    AVATAR_OPTIONS.forEach(avatar => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "avatarChoice";
+      button.dataset.avatarId = avatar.id;
+      button.textContent = avatar.symbol;
+      button.title = avatar.label;
+      button.setAttribute("aria-label", `${avatar.label} avatar`);
+      button.setAttribute("aria-pressed", "false");
+      button.addEventListener("click", () => {
+        profileState.avatarId = avatar.id;
+        saveProfileLocal();
+        renderPfp();
+        $("profileSaveStatus").textContent = `${avatar.label} avatar selected. Save your profile to share it with other members.`;
+      });
+      avatarChoices.appendChild(button);
     });
 
     bindClick("saveProfileBtn", async ()=>{
@@ -1876,7 +1861,7 @@
         ["profileState", "archetypeTopThree", "archetypeScore", "roomPlan"].forEach(key => localStorage.removeItem(key));
         $("loginEmail").value = "";
         $("loginPassword").value = "";
-        Object.assign(profileState, { bio: "", username: "", avatar: null, displayName: "" });
+        Object.assign(profileState, { bio: "", username: "", avatarId: "leaf", displayName: "" });
         await signOut(auth);
       } catch (error) {
         $("accountActionStatus").textContent = `Could not delete the account: ${error.message}`;
@@ -1939,7 +1924,7 @@
 
     window.showPage = showPage;
     window.goBack = goBack;
-    window.mawaesuSocialFeatures = initializeSocialFeatures({ app, auth, db, storage });
+    window.mawaesuSocialFeatures = initializeSocialFeatures({ app, auth, db });
     window.mawaesuRoomTools = initializeRoomTools({ app, auth, db });
     loadProfileLocal();
     setAura(null);

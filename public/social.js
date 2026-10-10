@@ -4,15 +4,15 @@ import {
   addDoc, collection, deleteDoc, doc, endAt, getDoc, getDocs, limit, onSnapshot, orderBy, query, startAfter, startAt,
   serverTimestamp, setDoc, updateDoc, where
 } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
-import { getDownloadURL, ref as storageRef, uploadBytes } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-storage.js";
 import { decryptMessage, encryptMessage, getKeyFingerprint, getOrCreateIdentity, deleteIdentity } from "./social-crypto.js";
+import { getAvatarOption } from "./avatars.js";
 
 const $ = id => document.getElementById(id);
 const callableNames = [
   "updatePublicProfile", "getAccountStatus", "sendConnectionRequest", "respondToConnectionRequest",
   "blockUser", "createDirectChat", "sendDirectMessage", "findRandomChat", "sendRandomChatMessage",
   "leaveRandomChat", "shareRandomUsername", "getRandomChatStatus", "submitUserReport",
-  "submitRandomChatReport",   "reserveReportEvidenceSlot", "submitModerationAppeal",
+  "submitRandomChatReport", "submitModerationAppeal",
   "deactivateAccount", "reactivateAccount", "deleteAccount"
 ];
 
@@ -24,15 +24,13 @@ function setStatus(id, message, isError = false) {
 }
 
 function makeProfileAvatar(profile, label = "") {
-  const avatar = document.createElement("img");
+  const option = getAvatarOption(profile.avatarId);
+  const avatar = document.createElement("div");
   avatar.className = "profileAvatar";
-  avatar.alt = label || (profile.displayName ? `${profile.displayName}'s profile photo` : "Profile photo");
-  avatar.loading = "lazy";
-  if (profile.avatarUrl) avatar.src = profile.avatarUrl;
-  else {
-    avatar.classList.add("profileAvatarPlaceholder");
-    avatar.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='20' fill='%23e8eee2'/%3E%3Ccircle cx='20' cy='15' r='7' fill='%237b9175'/%3E%3Cpath d='M7 38c1-9 6-13 13-13s12 4 13 13' fill='%237b9175'/%3E%3C/svg%3E";
-  }
+  avatar.setAttribute("role", "img");
+  avatar.setAttribute("aria-label", label || `${profile.displayName || profile.username || "Member"}'s ${option.label} avatar`);
+  avatar.textContent = option.symbol;
+  avatar.style.backgroundColor = option.color;
   return avatar;
 }
 
@@ -72,23 +70,7 @@ function makeItem(title, detail = "") {
   return item;
 }
 
-function appendMedia(container, url, mediaType, controls = false) {
-  if (!url) return;
-  const isVideo = mediaType.startsWith("video/");
-  const media = document.createElement(isVideo ? "video" : "img");
-  media.className = "postMedia";
-  media.src = url;
-  if (isVideo) {
-    media.controls = controls;
-    media.playsInline = true;
-  } else {
-    media.alt = "Attached media";
-    media.loading = "lazy";
-  }
-  container.appendChild(media);
-}
-
-export function initializeSocialFeatures({ app, auth, db, storage }) {
+export function initializeSocialFeatures({ app, auth, db }) {
   const functions = getFunctions(app, "us-central1");
   const callables = Object.fromEntries(callableNames.map(name => [name, httpsCallable(functions, name)]));
   let currentUser = null;
@@ -173,12 +155,12 @@ export function initializeSocialFeatures({ app, auth, db, storage }) {
     }
     const userSnapshot = await getDoc(doc(db, "users", currentUser.uid));
     const userData = userSnapshot.exists() ? userSnapshot.data() : {};
-    const avatarUrl = myProfile?.avatar || userData.avatarUrl || "";
+    const avatarId = myProfile?.avatarId || userData.profileState?.avatarId || "leaf";
     const result = await callables.updatePublicProfile({
       username,
       displayName: (userData.name || username).slice(0, 60),
       bio: (myProfile?.bio || "").slice(0, 280),
-      avatarUrl,
+      avatarId,
       encryptionPublicKey: identity.publicKey
     });
     myProfile.username = result.data.username;
@@ -191,10 +173,10 @@ export function initializeSocialFeatures({ app, auth, db, storage }) {
     const userSnapshot = await getDoc(doc(db, "users", currentUser.uid));
     const userData = userSnapshot.exists() ? userSnapshot.data() : {};
     myProfile = {
-      ...(userData.profileState || {}),
       displayName: userData.name || userData.profileState?.displayName || "",
       username: userData.username || userData.profileState?.username || "",
-      avatar: userData.avatarUrl || userData.profileState?.avatar || null
+      bio: userData.bio || userData.profileState?.bio || "",
+      avatarId: userData.profileState?.avatarId || "leaf"
     };
     let profileSnapshot;
     try {
@@ -210,7 +192,7 @@ export function initializeSocialFeatures({ app, auth, db, storage }) {
       const publicProfile = profileSnapshot.data();
       myProfile.username = myProfile.username || publicProfile.username || "";
       myProfile.bio = myProfile.bio ?? publicProfile.bio ?? "";
-      myProfile.avatar = userData.avatarUrl || publicProfile.avatarUrl || myProfile.avatar || null;
+      myProfile.avatarId = publicProfile.avatarId || myProfile.avatarId || "leaf";
     }
   }
 
@@ -649,21 +631,8 @@ export function initializeSocialFeatures({ app, auth, db, storage }) {
     reportTarget = targetUid;
     reportRandomRoomId = roomId;
     $("reportReasonInput").value = "";
-    $("reportEvidenceInput").value = "";
     $("reportSubmitStatus").textContent = "";
     $("reportDialog").showModal();
-  }
-
-  async function attachReportEvidence(reportId) {
-    const files = [...$("reportEvidenceInput").files];
-    if (files.length > 5) throw new Error("Attach no more than five screenshots.");
-    for (const file of files) {
-      if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 10 * 1024 * 1024) {
-        throw new Error("Evidence must be a JPEG, PNG, or WebP image under 10 MB.");
-      }
-      const slot = await callables.reserveReportEvidenceSlot({ reportId });
-      await uploadBytes(storageRef(storage, slot.data.storagePath), file, { contentType: file.type });
-    }
   }
 
   async function submitReport() {
@@ -672,28 +641,19 @@ export function initializeSocialFeatures({ app, auth, db, storage }) {
       setStatus("reportSubmitStatus", "Please describe what happened (at least 10 characters).", true);
       return;
     }
-    let reportCreated = false;
     try {
-      let result;
       const category = $("reportCategoryInput").value;
       if (reportRandomRoomId) {
         const submitRandomReport = httpsCallable(functions, "submitRandomChatReport");
-        result = await submitRandomReport({ roomId: reportRandomRoomId, category, description });
+        await submitRandomReport({ roomId: reportRandomRoomId, category, description });
       } else {
-        result = await callables.submitUserReport({ targetUid: reportTarget, category, description });
-      }
-      reportCreated = true;
-      try {
-        await attachReportEvidence(result.data.reportId);
-      } catch (error) {
-        setStatus("reportSubmitStatus", `Your report was submitted, but an evidence upload failed: ${error.message}. You can still submit the report without the remaining image(s).`, true);
-        return;
+        await callables.submitUserReport({ targetUid: reportTarget, category, description });
       }
       $("reportDialog").close();
-      alert("Your report was submitted with any attached evidence.");
+      alert("Your report was submitted with the details you provided.");
       await refreshAccountStatus();
     } catch (error) {
-      setStatus("reportSubmitStatus", `${reportCreated ? "Your report was submitted, but" : "Report could not be submitted:"} ${error.message}`, true);
+      setStatus("reportSubmitStatus", `Report could not be submitted: ${error.message}`, true);
     }
   }
 
@@ -885,24 +845,15 @@ export function initializeSocialFeatures({ app, auth, db, storage }) {
   async function publishNote() {
     const title = $("newNoteTitle").value.trim();
     const text = $("newNoteText").value.trim();
-    const file = $("noteMediaInput").files?.[0] || null;
     const question = $("pollQuestionInput").value.trim();
     const options = [...document.querySelectorAll(".pollOptionInput")].map(input => input.value.trim()).filter(Boolean);
-    if (!title && !text && !file && !question) {
-      setStatus("noteComposerStatus", "Add text, media, or a poll before publishing.", true);
+    if (!title && !text && !question) {
+      setStatus("noteComposerStatus", "Add text or a poll before publishing.", true);
       return;
     }
 
     if (question && options.length < 2) {
       setStatus("noteComposerStatus", "A poll needs at least two non-empty options.", true);
-      return;
-    }
-    if (file && !["image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm", "video/quicktime"].includes(file.type)) {
-      setStatus("noteComposerStatus", "Attach an image or video file.", true);
-      return;
-    }
-    if (file && file.size > 10 * 1024 * 1024) {
-      setStatus("noteComposerStatus", "Media must be no larger than 10 MB.", true);
       return;
     }
     try {
@@ -924,23 +875,8 @@ export function initializeSocialFeatures({ app, auth, db, storage }) {
           createdAt: serverTimestamp()
         });
       }
-      if (file) {
-        try {
-          const path = `notes/${currentUser.uid}/${noteRef.id}/${crypto.randomUUID()}`;
-          const uploaded = await uploadBytes(storageRef(storage, path), file, { contentType: file.type });
-          await updateDoc(noteRef, {
-            mediaUrl: await getDownloadURL(uploaded.ref),
-            mediaType: file.type
-          });
-        } catch (error) {
-          await deleteDoc(noteRef);
-          if (question) await deleteDoc(doc(db, "publicNotes", noteRef.id, "polls", "main"));
-          throw error;
-        }
-      }
       $("newNoteTitle").value = "";
       $("newNoteText").value = "";
-      $("noteMediaInput").value = "";
       $("pollQuestionInput").value = "";
       document.querySelectorAll(".pollOptionInput").forEach(input => { input.value = ""; });
       setStatus("noteComposerStatus", "Your note is public.");
@@ -1142,19 +1078,6 @@ export function initializeSocialFeatures({ app, auth, db, storage }) {
       body.className = "noteBody";
       body.textContent = note.text;
       card.appendChild(body);
-    }
-    if (note.mediaUrl) {
-      const media = document.createElement(note.mediaType?.startsWith("video/") ? "video" : "img");
-      media.className = "postMedia";
-      media.src = note.mediaUrl;
-      if (media instanceof HTMLVideoElement) {
-        media.controls = true;
-        media.playsInline = true;
-      } else {
-        media.alt = "Attached media";
-        media.loading = "lazy";
-      }
-      card.appendChild(media);
     }
     if (featuredByUid) {
       const attribution = document.createElement("p");

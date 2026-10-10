@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [html, social, rules, indexes, functions] = await Promise.all([
+const [html, social, rules, indexes, functions, firebaseConfig, avatars] = await Promise.all([
   readFile(new URL("../public/index.html", import.meta.url), "utf8"),
   readFile(new URL("../public/social.js", import.meta.url), "utf8"),
   readFile(new URL("../firestore.rules", import.meta.url), "utf8"),
   readFile(new URL("../firestore.indexes.json", import.meta.url), "utf8"),
-  readFile(new URL("../functions/index.js", import.meta.url), "utf8")
+  readFile(new URL("../functions/index.js", import.meta.url), "utf8"),
+  readFile(new URL("../firebase.json", import.meta.url), "utf8"),
+  readFile(new URL("../public/avatars.js", import.meta.url), "utf8")
 ]);
 
 test("community navigation and private/public profile collections are distinct", () => {
@@ -56,4 +58,25 @@ test("private saves and conversation read markers are owner-restricted", () => {
   assert.match(social, /className = "unreadIndicator"/);
   assert.match(social, /decryptMessage\(identity, profile\.encryptionPublicKey, chat\.id, message\)/);
   assert.match(functions, /where\("featuredByUserId", "==", uid\)/);
+});
+
+test("community avatars use built-in selectable designs without image hosting", () => {
+  assert.match(html, /id="avatarChoices"[\s\S]*?role="group"/);
+  assert.match(html, /Choose an illustrated avatar/);
+  assert.match(social, /updatePublicProfile\(\{[\s\S]*?avatarId/);
+  assert.match(social, /getAvatarOption\(profile\.avatarId\)/);
+  assert.match(functions, /data\.avatarId[\s\S]*?available illustrated avatars/);
+  assert.match(avatars, /id: "leaf"/);
+  assert.doesNotMatch(html + social, /firebase-storage\.js|uploadBytes|getDownloadURL|uploadAvatar/);
+  assert.doesNotMatch(firebaseConfig, /"storage"\s*:/);
+});
+
+test("notes and reports are text-only and reject media uploads", () => {
+  assert.doesNotMatch(html, /noteMediaInput|reportEvidenceInput|<input\b[^>]*type="file"/);
+  assert.match(html, /Reports currently accept written details only/);
+  assert.doesNotMatch(social, /mediaUrl|mediaType|reportEvidence|uploadBytes|firebase-storage\.js/);
+  assert.doesNotMatch(functions, /getStorage|reserveReportEvidenceSlot|reportEvidenceSlots/);
+  const noteRules = rules.match(/function validNote\(data\) \{([\s\S]*?)\n    \}/)?.[1];
+  assert.ok(noteRules);
+  assert.doesNotMatch(noteRules, /mediaUrl|mediaType/);
 });

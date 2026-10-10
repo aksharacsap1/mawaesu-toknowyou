@@ -67,35 +67,12 @@ service cloud.firestore {
     function validNote(data) {
       return data.keys().hasOnly([
           'authorUid', 'title', 'text', 'createdAt', 'updatedAt', 'visibility', 'tags',
-          'mediaUrl', 'mediaType', 'pollMetadata'
+          'pollMetadata'
         ])
         && data.authorUid == request.auth.uid
         && (!('title' in data.keys()) || (data.title is string && data.title.size() <= 160))
         && data.text is string
         && data.text.size() <= 5000
-        && (
-          !('mediaUrl' in data.keys())
-          || (
-            data.mediaUrl is string
-            && data.mediaUrl.size() <= 2048
-            && data.mediaUrl.matches('https://.+')
-            && 'mediaType' in data.keys()
-            && data.mediaType in [
-              'image/jpeg', 'image/png', 'image/webp',
-              'video/mp4', 'video/webm', 'video/quicktime'
-            ]
-          )
-        )
-        && (
-          !('mediaType' in data.keys())
-          || (
-            'mediaUrl' in data.keys()
-            && data.mediaType in [
-              'image/jpeg', 'image/png', 'image/webp',
-              'video/mp4', 'video/webm', 'video/quicktime'
-            ]
-          )
-        )
         && (
           !('pollMetadata' in data.keys())
           || (
@@ -120,12 +97,12 @@ service cloud.firestore {
       allow read: if isSelf(uid);
       allow create: if isSelf(uid)
         && request.resource.data.keys().hasOnly([
-          'name', 'email', 'username', 'createdAt', 'profileState', 'avatarUrl',
+          'name', 'email', 'username', 'createdAt', 'profileState',
           'bio', 'archetypeTopThree', 'archetypeScore', 'updatedAt'
         ]);
       allow update: if isSelf(uid)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'name', 'email', 'username', 'profileState', 'avatarUrl', 'bio',
+          'name', 'email', 'username', 'profileState', 'bio',
           'archetypeTopThree', 'archetypeScore', 'updatedAt'
         ]);
       allow delete: if false;
