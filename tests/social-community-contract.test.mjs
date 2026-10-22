@@ -127,14 +127,15 @@ test("account-status read failures do not block notes or expose Firebase interna
 });
 
 test("quiz results create a branded, downloadable share card with three-word vibes", () => {
-  for (const id of ["flexCardPreview", "downloadFlexCardBtn", "shareInstagramBtn", "shareXBtn", "sharePinterestBtn"]) {
+  for (const id of ["flexCardPreview", "downloadFlexCardBtn"]) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
+  assert.doesNotMatch(html, /shareInstagramBtn|shareXBtn|sharePinterestBtn|Instagram Stories|Share to X|Pinterest/);
   assert.match(html, /void renderFlexCard\(stored\[0\]\)/);
   assert.match(shareCardSource, /canvas\.toBlob[\s\S]*?"image\/png"/);
   assert.match(shareCardSource, /siteUrl\.replace/);
-  assert.match(shareCardSource, /navigator\.canShare\?\.\(\{ files: \[file\] \}\)/);
-  assert.match(shareCardSource, /twitter\.com\/intent\/tweet/);
+  assert.match(html, /bindClick\("downloadFlexCardBtn", downloadResultCard\)/);
+  assert.doesNotMatch(shareCardSource, /navigator\.share|twitter\.com|pinterest\.com|instagram\.com/);
 
   for (const archetype of ["🌿 The Gentle Healer", "🌙 The Wounded Dreamer", "🌟 The Luminous Soul"]) {
     assert.equal(getSpatialVibe(archetype).split(" · ").length, 3);

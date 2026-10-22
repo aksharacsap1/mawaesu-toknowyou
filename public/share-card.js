@@ -171,28 +171,3 @@ export function downloadFlexCard(blob) {
   link.click();
   setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
 }
-
-export async function shareFlexCard(blob, platform, { text, url }) {
-  const file = new File([blob], "mawaesu-archetype.png", { type: "image/png" });
-  if (navigator.canShare?.({ files: [file] }) && navigator.share) {
-    await navigator.share({ files: [file], title: "My MAWAESU archetype", text });
-    const destination = { instagram: "Instagram Stories", x: "X", pinterest: "Pinterest" }[platform];
-    return `Choose ${destination} in the share sheet to post your card.`;
-  }
-
-  if (platform === "x") {
-    downloadFlexCard(blob);
-    const intent = new URL("https://twitter.com/intent/tweet");
-    intent.searchParams.set("text", text);
-    intent.searchParams.set("url", url);
-    window.open(intent.href, "_blank", "noopener,noreferrer");
-    return "A post draft is open on X and your card was downloaded to attach.";
-  }
-
-  downloadFlexCard(blob);
-  const destination = platform === "instagram"
-    ? "https://www.instagram.com/"
-    : "https://www.pinterest.com/pin-builder/";
-  window.open(destination, "_blank", "noopener,noreferrer");
-  return `Your card was downloaded. Finish sharing it in ${platform === "instagram" ? "Instagram Stories" : "Pinterest"}.`;
-}

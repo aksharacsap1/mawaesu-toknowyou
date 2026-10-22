@@ -718,9 +718,6 @@
           <img id="flexCardPreview" class="flexCardPreview" alt="Your personalized MAWAESU archetype share card" hidden />
           <div class="flexShareActions">
             <button id="downloadFlexCardBtn" class="btn btn-primary" type="button" disabled>Download card</button>
-            <button id="shareInstagramBtn" class="btn btn-secondary" type="button" disabled>Instagram Stories</button>
-            <button id="shareXBtn" class="btn btn-secondary" type="button" disabled>Share to X</button>
-            <button id="sharePinterestBtn" class="btn btn-secondary" type="button" disabled>Pinterest</button>
           </div>
           <p id="flexShareStatus" class="pageStatus" role="status" aria-live="polite"></p>
         </section>
@@ -1015,7 +1012,7 @@
     import { initializeRoomTools } from "./room-tools.js";
     import { getDailyAffirmation } from "./affirmations.js";
     import { AVATAR_OPTIONS, getAvatarOption } from "./avatars.js";
-    import { createFlexCardBlob, downloadFlexCard, getSpatialVibe, shareFlexCard } from "./share-card.js";
+    import { createFlexCardBlob, downloadFlexCard, getSpatialVibe } from "./share-card.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyA6pnGyG_S5WLz5JNW4hDcgAVto6YtdRWo",
@@ -1466,10 +1463,10 @@
 
     async function renderFlexCard(match){
       const preview = $("flexCardPreview");
-      const buttons = ["downloadFlexCardBtn", "shareInstagramBtn", "shareXBtn", "sharePinterestBtn"];
+      const downloadButton = $("downloadFlexCardBtn");
       const status = $("flexShareStatus");
       if (!match || !preview || !status) return;
-      buttons.forEach(id => { $(id).disabled = true; });
+      downloadButton.disabled = true;
       status.textContent = "Preparing your share card…";
       const colors = ARCHETYPE_COLOURS[match.name]?.core || [];
       try {
@@ -1483,7 +1480,7 @@
         flexCardPreviewUrl = URL.createObjectURL(flexCardBlob);
         preview.src = flexCardPreviewUrl;
         preview.hidden = false;
-        buttons.forEach(id => { $(id).disabled = false; });
+        downloadButton.disabled = false;
         status.textContent = "Your card is ready. The image is created on this device.";
       } catch (error) {
         flexCardBlob = null;
@@ -1492,28 +1489,14 @@
       }
     }
 
-    function shareResultCard(platform){
+    function downloadResultCard(){
       if (!flexCardBlob) return;
-      const match = getStoredTopThree()[0];
       const status = $("flexShareStatus");
-      const text = match ? `I got ${match.name.replace(/^[^A-Za-z]+/, "")} on MAWAESU. Discover your own archetype:` : "Discover your archetype with MAWAESU:";
-      if (platform === "download") {
-        downloadFlexCard(flexCardBlob);
-        status.textContent = "Your share card has been downloaded.";
-        return;
-      }
-      void shareFlexCard(flexCardBlob, platform, {
-        text,
-        url: "https://mawaesu-toknowyou.web.app"
-      }).then(message => { status.textContent = message; }).catch(error => {
-        status.textContent = error.name === "AbortError" ? "Sharing was cancelled." : `Could not open sharing: ${error.message}`;
-      });
+      downloadFlexCard(flexCardBlob);
+      status.textContent = "Your share card has been downloaded.";
     }
 
-    bindClick("downloadFlexCardBtn", () => shareResultCard("download"));
-    bindClick("shareInstagramBtn", () => shareResultCard("instagram"));
-    bindClick("shareXBtn", () => shareResultCard("x"));
-    bindClick("sharePinterestBtn", () => shareResultCard("pinterest"));
+    bindClick("downloadFlexCardBtn", downloadResultCard);
 
     function getStoredTopThree(){ try { return JSON.parse(localStorage.getItem("archetypeTopThree")||"[]"); } catch { return []; } }
 
