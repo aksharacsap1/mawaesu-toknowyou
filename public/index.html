@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="google-site-verification" content="8CxaVokVQYeElikM9vb1y-6qnhHtNzZpDB1sn_-_aY4" />
   <title>MAWAESU | Self-Discovery &amp; Personal Growth</title>
-  <meta name="description" content="Discover yourself, connect privately by username, meet anonymously for five minutes, and share public notes with the MAWAESU community." />
+  <meta name="description" content="Discover yourself, connect privately by username, and share public notes with the MAWAESU community." />
   <meta name="robots" content="index, follow" />
   <meta name="theme-color" content="#f6f5ec" />
   <link rel="canonical" href="https://mawaesu-toknowyou.web.app/" />
@@ -14,13 +14,13 @@
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="MAWAESU" />
   <meta property="og:title" content="MAWAESU | Self-Discovery &amp; Personal Growth" />
-  <meta property="og:description" content="Discover yourself, connect privately by username, meet anonymously for five minutes, and share public notes with the MAWAESU community." />
+  <meta property="og:description" content="Discover yourself, connect privately by username, and share public notes with the MAWAESU community." />
   <meta property="og:url" content="https://mawaesu-toknowyou.web.app/" />
   <meta property="og:image" content="https://mawaesu-toknowyou.web.app/logo.png" />
   <meta property="og:image:alt" content="MAWAESU app logo" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="MAWAESU | Self-Discovery &amp; Personal Growth" />
-  <meta name="twitter:description" content="Discover yourself, connect privately by username, meet anonymously for five minutes, and share public notes with the MAWAESU community." />
+  <meta name="twitter:description" content="Discover yourself, connect privately by username, and share public notes with the MAWAESU community." />
   <meta name="twitter:image" content="https://mawaesu-toknowyou.web.app/logo.png" />
   <!-- Replace PLACEHOLDER with the token from Google Search Console if needed. -->
   <!-- <meta name="google-site-verification" content="PLACEHOLDER" /> -->
@@ -589,7 +589,7 @@
   <nav id="appNavigation" class="appNav" aria-label="Main navigation" hidden>
     <button class="btn" type="button" data-go="mainMenuPage" aria-label="Home and public notes" aria-current="page"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg><span>Home</span></button>
     <button class="btn" type="button" data-go="searchPage" aria-label="Search MAWAESU users"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg><span>Search</span></button>
-    <button class="btn" type="button" data-go="chatsPage" aria-label="Chats and anonymous chat"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 11.5a7.5 7.5 0 0 1-8 7.5 8.8 8.8 0 0 1-3.5-.7L4 20l1.4-3.7A7 7 0 0 1 4 11.5 7.5 7.5 0 0 1 12 4a7.5 7.5 0 0 1 8 7.5Z"/></svg><span>Chats</span></button>
+    <button class="btn" type="button" data-go="chatsPage" aria-label="Chats"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 11.5a7.5 7.5 0 0 1-8 7.5 8.8 8.8 0 0 1-3.5-.7L4 20l1.4-3.7A7 7 0 0 1 4 11.5 7.5 7.5 0 0 1 12 4a7.5 7.5 0 0 1 8 7.5Z"/></svg><span>Chats</span></button>
     <button class="btn" type="button" data-go="profilePage" aria-label="Your profile and notes"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.2 3.3-7 8-7s8 2.8 8 7"/></svg><span>Profile</span></button>
   </nav>
   <main id="appRoot">
@@ -853,7 +853,7 @@
           <div class="profileFeatureGrid">
             <button id="signOutBtn" class="btn btn-secondary" type="button">Sign out</button>
             <button id="deactivateAccountBtn" class="btn btn-secondary" type="button">Deactivate account</button>
-            <button id="deleteAccountBtn" class="btn btn-danger" type="button">Delete account</button>
+            <button id="deleteAccountBtn" class="btn btn-danger" type="button">Request account deletion</button>
           </div>
           <button id="deleteDataBtn" class="btn btn-secondary" type="button" style="margin-top:12px">Reset quiz results</button>
         </section>
@@ -895,9 +895,9 @@
         <div id="chatsOverview">
           <section id="randomSection" class="socialCard">
             <h2>Unknown chat</h2>
-            <p class="muted">Meet someone anonymously for five minutes. Your username remains hidden unless you choose to share it at the end.</p>
+            <p class="muted">Anonymous matching is paused on Firebase Spark. A trusted backend is needed to protect participant identity and enforce the five-minute limit.</p>
             <div id="randomEligibility" class="socialStatus" role="status" aria-live="polite"></div>
-            <button id="startRandomChatBtn" class="btn btn-purple">Start a 5-minute chat</button>
+            <button id="startRandomChatBtn" class="btn btn-purple" disabled>Unavailable on Firebase Spark</button>
             <div id="randomChatPanel" hidden>
               <div class="timerDisplay" id="randomChatTimer" aria-live="polite">05:00</div>
               <div id="randomChatMessages" class="chatMessages" aria-live="polite"></div>
@@ -941,11 +941,11 @@
             <button id="blockChatPeerBtn" class="btn btn-danger" disabled>Block</button>
             <button id="reportChatPeerBtn" class="btn btn-danger" disabled>Report</button>
           </div>
-          <p class="muted">Messages are encrypted in this browser before upload. Your private key stays on this device; clearing browser data may make old messages unreadable. Report evidence is shared only when attached.</p>
+          <p class="muted">Messages are encrypted in this browser before upload. Your private key stays on this device; clearing browser data may make old messages unreadable. Reports accept written details only; screenshots are not uploaded.</p>
         </section>
         <section class="socialCard">
           <h2>Safety &amp; account status</h2>
-          <p id="moderationStatus" class="muted">Reports are reviewed; a report is not proof by itself. Five reports pause random matching for 30 days; more than ten reports can ban an account.</p>
+          <p id="moderationStatus" class="muted">Safety reports and appeals are reviewed manually. The Firebase Spark plan does not support automatic report thresholds or account bans.</p>
           <div id="appealPanel" hidden>
             <h3>Appeal a restriction</h3>
             <p class="muted">Explain why you believe the decision should be reviewed. Reinstatement is not guaranteed.</p>
@@ -1853,18 +1853,15 @@
     });
     bindClick("deleteAccountBtn", async event=>{
       const button = event.currentTarget;
-      if (!confirm("Permanently delete your account and your own notes? This cannot be undone. Reports already submitted may be retained for safety review.")) return;
+      if (!confirm("Open an email request to permanently delete your account and associated data? Support will review it manually.")) return;
       button.disabled = true;
-      $("accountActionStatus").textContent = "Deleting your account and notes…";
+      $("accountActionStatus").textContent = "Preparing your account deletion request…";
       try {
-        await window.mawaesuSocialFeatures.deleteAccount();
-        ["profileState", "archetypeTopThree", "archetypeScore", "roomPlan"].forEach(key => localStorage.removeItem(key));
-        $("loginEmail").value = "";
-        $("loginPassword").value = "";
-        Object.assign(profileState, { bio: "", username: "", avatarId: "leaf", displayName: "" });
-        await signOut(auth);
+        window.mawaesuSocialFeatures.requestAccountDeletion();
+        $("accountActionStatus").textContent = "Your email app was opened. Send the request so support can securely remove your account and associated data.";
+        button.disabled = false;
       } catch (error) {
-        $("accountActionStatus").textContent = `Could not delete the account: ${error.message}`;
+        $("accountActionStatus").textContent = `Could not prepare the deletion request: ${error.message}`;
         button.disabled = false;
       }
     });
@@ -1897,6 +1894,14 @@
                 deactivated: false,
                 updatedAt: serverTimestamp()
               });
+              const publicProfileRef = doc(db, "publicProfiles", user.uid);
+              const publicProfile = await getDoc(publicProfileRef);
+              if (publicProfile.exists()) {
+                await updateDoc(publicProfileRef, {
+                  active: true,
+                  updatedAt: serverTimestamp()
+                });
+              }
             } catch (error) {
               console.error("Could not reactivate the account.", error);
               reactivationError = error.message;
@@ -1927,7 +1932,7 @@
 
     window.showPage = showPage;
     window.goBack = goBack;
-    window.mawaesuSocialFeatures = initializeSocialFeatures({ app, auth, db });
+    window.mawaesuSocialFeatures = initializeSocialFeatures({ auth, db });
     window.mawaesuRoomTools = initializeRoomTools({ app, auth, db });
     loadProfileLocal();
     setAura(null);

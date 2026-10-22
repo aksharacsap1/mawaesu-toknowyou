@@ -1,20 +1,12 @@
-import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-functions.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-auth.js";
 import {
-  addDoc, collection, deleteDoc, doc, endAt, getDoc, getDocs, limit, onSnapshot, orderBy, query, startAfter, startAt,
-  serverTimestamp, setDoc, updateDoc, where
+  addDoc, collection, deleteDoc, doc, endAt, getDoc, getDocs, limit, onSnapshot, orderBy, query, runTransaction,
+  serverTimestamp, setDoc, updateDoc, where, startAfter, startAt
 } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
-import { decryptMessage, encryptMessage, getKeyFingerprint, getOrCreateIdentity, deleteIdentity } from "./social-crypto.js";
+import { decryptMessage, encryptMessage, getKeyFingerprint, getOrCreateIdentity } from "./social-crypto.js";
 import { getAvatarOption } from "./avatars.js";
 
 const $ = id => document.getElementById(id);
-const callableNames = [
-  "updatePublicProfile", "sendConnectionRequest", "respondToConnectionRequest",
-  "blockUser", "createDirectChat", "sendDirectMessage", "findRandomChat", "sendRandomChatMessage",
-  "leaveRandomChat", "shareRandomUsername", "getRandomChatStatus", "submitUserReport",
-  "submitRandomChatReport", "submitModerationAppeal",
-  "deactivateAccount", "reactivateAccount", "deleteAccount"
-];
 
 function setStatus(id, message, isError = false) {
   const element = $(id);
@@ -48,8 +40,8 @@ function formatTimestamp(timestamp) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
 
-async function directChatId(peerUid) {
-  const participantUids = [currentUser.uid, peerUid].sort();
+async function directChatId(currentUid, peerUid) {
+  const participantUids = [currentUid, peerUid].sort();
   const bytes = new TextEncoder().encode(JSON.stringify(participantUids));
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
@@ -78,21 +70,7 @@ function makeItem(title, detail = "") {
   return item;
 }
 
-export function initializeSocialFeatures({ app, auth, db }) {
-  const functions = getFunctions(app, "us-central1");
-  const callables = Object.fromEntries(callableNames.map(name => [name, async data => {
-    try {
-      return await httpsCallable(functions, name)(data);
-    } catch (error) {
-      if (/^(?:functions\/)?(?:internal|not-found|unavailable)$/.test(error.code || "")) {
-        throw new Error(
-          "This social feature is temporarily unavailable. Please try again later.",
-          { cause: error }
-        );
-      }
-      throw error;
-    }
-  }]));
+export function initializeSocialFeatures({ auth, db }) {
   let currentUser = null;
   let identity = null;
   let myProfile = null;
@@ -100,25 +78,15 @@ export function initializeSocialFeatures({ app, auth, db }) {
   let chatPeer = null;
   let chatPeerProfile = null;
   let selectedPublicProfile = null;
-  let randomRoomId = null;
-  let randomPeerKey = null;
-  let randomAlias = "";
-  let randomTimer = null;
-  let randomActive = false;
-  let randomMessagesSubscribed = false;
   let reportTarget = null;
-  let reportRandomRoomId = null;
   let searchDebounce = null;
   let searchRequestVersion = 0;
   let listeners = [];
-  let randomMessageListener = null;
   let directMessageListener = null;
   let noteFeedListener = null;
   let featuredFeedListener = null;
-  let randomRoomListener = null;
   const noteListeners = new Map();
   const profileCache = new Map();
-  const chatPreviewListeners = new Map();
 
   async function readAccountStatus() {
     if (!currentUser) throw new Error("Sign in to check account status.");
@@ -128,13 +96,9 @@ export function initializeSocialFeatures({ app, auth, db }) {
     ]);
     const moderation = moderationSnapshot.exists() ? moderationSnapshot.data() : {};
     const account = accountSnapshot.exists() ? accountSnapshot.data() : {};
-    const suspensionTimestamp = moderation.randomChatSuspendedUntil;
-    const suspensionDate = suspensionTimestamp?.toDate?.() || null;
     return {
       banned: moderation.banned === true,
-      deactivated: account.deactivated === true,
-      randomChatSuspended: Boolean(suspensionDate && suspensionDate.getTime() > Date.now()),
-      randomChatSuspendedUntil: suspensionDate?.toISOString() || null
+      deactivated: account.deactivated === true
     };
   }
 
@@ -142,31 +106,17 @@ export function initializeSocialFeatures({ app, auth, db }) {
     if (listener) listener();
   }
 
-  function clearChatPreviewListeners() {
-    for (const stop of chatPreviewListeners.values()) {
-      stopListener(stop);
-      const listenerIndex = listeners.indexOf(stop);
-      if (listenerIndex >= 0) listeners.splice(listenerIndex, 1);
-    }
-    chatPreviewListeners.clear();
-  }
-
   function clearListeners() {
     listeners.forEach(stopListener);
     listeners = [];
     noteListeners.forEach(stopListener);
     noteListeners.clear();
-    clearChatPreviewListeners();
-    stopListener(randomMessageListener);
     stopListener(directMessageListener);
     stopListener(noteFeedListener);
     stopListener(featuredFeedListener);
-    stopListener(randomRoomListener);
-    randomMessageListener = null;
     directMessageListener = null;
     noteFeedListener = null;
     featuredFeedListener = null;
-    randomRoomListener = null;
   }
 
   async function getPublicProfile(uid) {
@@ -194,16 +144,39 @@ export function initializeSocialFeatures({ app, auth, db }) {
     const userSnapshot = await getDoc(doc(db, "users", currentUser.uid));
     const userData = userSnapshot.exists() ? userSnapshot.data() : {};
     const avatarId = myProfile?.avatarId || userData.profileState?.avatarId || "leaf";
-    const result = await callables.updatePublicProfile({
-      username,
-      displayName: (userData.name || username).slice(0, 60),
-      bio: (myProfile?.bio || "").slice(0, 280),
-      avatarId,
-      encryptionPublicKey: identity.publicKey
+    const displayName = (userData.name || username).slice(0, 60);
+    const bio = (myProfile?.bio || "").slice(0, 280);
+    const usernameRef = doc(db, "usernames", username.toLowerCase());
+    const profileRef = doc(db, "publicProfiles", currentUser.uid);
+    await runTransaction(db, async transaction => {
+      const [taken, current] = await Promise.all([
+        transaction.get(usernameRef),
+        transaction.get(profileRef)
+      ]);
+      if (taken.exists() && taken.data().uid !== currentUser.uid) {
+        throw new Error("That username is already taken.");
+      }
+      const previousUsername = current.exists() ? current.data().username : "";
+      if (previousUsername && previousUsername.toLowerCase() !== username.toLowerCase()) {
+        const previousRef = doc(db, "usernames", previousUsername.toLowerCase());
+        const previous = await transaction.get(previousRef);
+        if (previous.exists() && previous.data().uid === currentUser.uid) transaction.delete(previousRef);
+      }
+      transaction.set(usernameRef, { uid: currentUser.uid, username: username.toLowerCase() });
+      transaction.set(profileRef, {
+        uid: currentUser.uid,
+        username: username.toLowerCase(),
+        displayName,
+        bio,
+        avatarId,
+        encryptionPublicKey: identity.publicKey,
+        active: true,
+        updatedAt: serverTimestamp()
+      });
     });
-    myProfile.username = result.data.username;
+    myProfile.username = username.toLowerCase();
     profileCache.delete(currentUser.uid);
-    return result.data;
+    return { username: myProfile.username, updated: true };
   }
 
   async function loadOwnProfile() {
@@ -229,6 +202,96 @@ export function initializeSocialFeatures({ app, auth, db }) {
       myProfile.bio = myProfile.bio ?? publicProfile.bio ?? "";
       myProfile.avatarId = publicProfile.avatarId || myProfile.avatarId || "leaf";
     }
+  }
+
+  async function sendConnectionRequest(recipientUid) {
+    if (recipientUid === currentUser.uid) throw new Error("You cannot connect with yourself.");
+    const relationship = await getDoc(doc(db, "connections", currentUser.uid, "users", recipientUid));
+    if (relationship.exists() && relationship.data().status === "accepted") {
+      throw new Error("You are already connected.");
+    }
+    const [outgoing, incoming] = await Promise.all([
+      getDocs(query(
+        collection(db, "connectionRequests"),
+        where("senderUid", "==", currentUser.uid),
+        where("recipientUid", "==", recipientUid),
+        where("status", "==", "pending")
+      )),
+      getDocs(query(
+        collection(db, "connectionRequests"),
+        where("senderUid", "==", recipientUid),
+        where("recipientUid", "==", currentUser.uid),
+        where("status", "==", "pending")
+      ))
+    ]);
+    if (!outgoing.empty) throw new Error("A connection request is already pending.");
+    if (!incoming.empty) throw new Error("This person has already sent you a request; you can accept it in your requests.");
+    await addDoc(collection(db, "connectionRequests"), {
+      senderUid: currentUser.uid,
+      recipientUid,
+      status: "pending",
+      createdAt: serverTimestamp()
+    });
+  }
+
+  async function respondToConnectionRequest(request, accept) {
+    const requestRef = doc(db, "connectionRequests", request.id);
+    await runTransaction(db, async transaction => {
+      const snapshot = await transaction.get(requestRef);
+      if (!snapshot.exists() || snapshot.data().recipientUid !== currentUser.uid ||
+          snapshot.data().status !== "pending") {
+        throw new Error("This connection request is no longer available.");
+      }
+      const senderUid = snapshot.data().senderUid;
+      transaction.update(requestRef, {
+        status: accept ? "accepted" : "declined",
+        respondedAt: serverTimestamp()
+      });
+      if (accept) {
+        transaction.set(doc(db, "connections", currentUser.uid, "users", senderUid), {
+          uid: senderUid,
+          status: "accepted",
+          requestId: request.id,
+          connectedAt: serverTimestamp()
+        });
+        transaction.set(doc(db, "connections", senderUid, "users", currentUser.uid), {
+          uid: currentUser.uid,
+          status: "accepted",
+          requestId: request.id,
+          connectedAt: serverTimestamp()
+        });
+      }
+    });
+  }
+
+  async function blockUser(targetUid) {
+    if (!targetUid || targetUid === currentUser.uid) throw new Error("Choose a valid member to block.");
+    const blockRef = doc(db, "blocks", currentUser.uid, "users", targetUid);
+    if ((await getDoc(blockRef)).exists()) return;
+    await setDoc(blockRef, {
+      uid: targetUid,
+      createdAt: serverTimestamp()
+    });
+  }
+
+  async function getOrCreateDirectChat(peerUid) {
+    const chatId = await directChatId(currentUser.uid, peerUid);
+    const chatRef = doc(db, "directChats", chatId);
+    try {
+      await setDoc(chatRef, {
+        participantUids: [currentUser.uid, peerUid].sort(),
+        createdAt: serverTimestamp()
+      });
+    } catch (writeError) {
+      const snapshot = await getDoc(chatRef);
+      if (!snapshot.exists() ||
+          !Array.isArray(snapshot.data().participantUids) ||
+          !snapshot.data().participantUids.includes(currentUser.uid) ||
+          !snapshot.data().participantUids.includes(peerUid)) {
+        throw writeError;
+      }
+    }
+    return chatId;
   }
 
   function renderSearchResult(container, profile) {
@@ -393,16 +456,16 @@ export function initializeSocialFeatures({ app, auth, db }) {
       if (!profile) continue;
       const item = makeItem(`@${profile.username}`, "Wants to connect with you.");
       item.appendChild(makeButton("Accept", async () => {
-        try { await callables.respondToConnectionRequest({ requestId: request.id, accept: true }); }
+        try { await respondToConnectionRequest(request, true); }
         catch (error) { setStatus("peopleSearchStatus", error.message, true); }
       }, "btn btn-primary"));
       item.appendChild(makeButton("Decline", async () => {
-        try { await callables.respondToConnectionRequest({ requestId: request.id, accept: false }); }
+        try { await respondToConnectionRequest(request, false); }
         catch (error) { setStatus("peopleSearchStatus", error.message, true); }
       }));
       item.appendChild(makeButton("Block", async () => {
         if (!confirm(`Block @${profile.username}?`)) return;
-        try { await callables.blockUser({ targetUid: profile.uid }); }
+        try { await blockUser(profile.uid); }
         catch (error) { setStatus("peopleSearchStatus", error.message, true); }
       }, "btn btn-danger"));
       container.appendChild(item);
@@ -431,7 +494,6 @@ export function initializeSocialFeatures({ app, auth, db }) {
   function listenForConnections() {
     const connectionQuery = collection(db, "connections", currentUser.uid, "users");
     listeners.push(onSnapshot(connectionQuery, async snapshot => {
-      clearChatPreviewListeners();
       const container = $("connectionsList");
       container.replaceChildren();
       if (snapshot.empty) {
@@ -441,11 +503,6 @@ export function initializeSocialFeatures({ app, auth, db }) {
       if (!identity) identity = await getOrCreateIdentity(currentUser.uid);
       const profiles = (await Promise.all(snapshot.docs.map(relationship => getPublicProfile(relationship.id))))
         .filter(profile => profile);
-      const chatByPeer = new Map(await Promise.all(profiles.map(async profile => {
-        const chatId = await directChatId(profile.uid);
-        const chat = await getDoc(doc(db, "directChats", chatId));
-        return [profile.uid, chat.exists() ? chat : null];
-      })));
       const renderedRows = [];
       const sortRows = () => renderedRows
         .sort((a, b) =>
@@ -492,14 +549,15 @@ export function initializeSocialFeatures({ app, auth, db }) {
             return;
           }
           try {
-            const chat = await callables.createDirectChat({ otherUid: profile.uid });
-            const encrypted = await encryptMessage(identity, profile.encryptionPublicKey, chat.data.chatId, `Today's affirmation for you:\n\n${affirmation}`);
-            await callables.sendDirectMessage({
-              chatId: chat.data.chatId,
+            const chatId = await getOrCreateDirectChat(profile.uid);
+            const encrypted = await encryptMessage(identity, profile.encryptionPublicKey, chatId, `Today's affirmation for you:\n\n${affirmation}`);
+            await addDoc(collection(db, "directChats", chatId, "messages"), {
+              senderUid: currentUser.uid,
               ciphertext: encrypted.ciphertext,
               nonce: encrypted.nonce,
               algorithm: "ECDH-P256+HKDF-SHA256+AES-256-GCM",
-              clientMessageId: crypto.randomUUID()
+              clientMessageId: crypto.randomUUID(),
+              createdAt: serverTimestamp()
             });
             setStatus("peopleSearchStatus", `Today's affirmation was sent to @${profile.username} in an encrypted message.`);
           } catch (error) {
@@ -508,37 +566,6 @@ export function initializeSocialFeatures({ app, auth, db }) {
         }));
         container.appendChild(item);
         renderedRows.push(item);
-
-        const chat = chatByPeer.get(profile.uid);
-        if (chat && profile.encryptionPublicKey) {
-          const previewListener = onSnapshot(query(
-            collection(db, "directChats", chat.id, "messages"),
-            orderBy("createdAt", "desc"),
-            limit(1)
-          ), snapshot => {
-            const latest = snapshot.docs[0];
-            if (!latest) return;
-            void (async () => {
-              const message = latest.data();
-              const readState = await getDoc(doc(db, "directChats", chat.id, "readStates", currentUser.uid));
-              if (!container.contains(item)) return;
-              try {
-                preview.textContent = await decryptMessage(identity, profile.encryptionPublicKey, chat.id, message);
-              } catch (error) {
-                console.error("Could not decrypt a conversation preview.", error);
-                preview.textContent = "Encrypted message";
-              }
-              time.textContent = formatTimestamp(message.createdAt);
-              if (message.createdAt?.toDate) time.dateTime = message.createdAt.toDate().toISOString();
-              const readAt = readState.data()?.lastReadAt?.toMillis?.() || 0;
-              unread.hidden = message.senderUid === currentUser.uid ||
-                (message.createdAt?.toMillis?.() || 0) <= readAt;
-              sortRows();
-            })().catch(error => setStatus("moderationStatus", `Could not load the conversation preview: ${error.message}`, true));
-          }, error => setStatus("moderationStatus", `Could not load the conversation preview: ${error.message}`, true));
-          chatPreviewListeners.set(profile.uid, previewListener);
-          listeners.push(previewListener);
-        }
       }
       sortRows();
     }, error => setStatus("peopleSearchStatus", error.message, true)));
@@ -546,8 +573,8 @@ export function initializeSocialFeatures({ app, auth, db }) {
 
   async function openDirectChat(profile) {
     try {
-      const result = await callables.createDirectChat({ otherUid: profile.uid });
-      const chatId = result.data.chatId;
+      if (!profile.encryptionPublicKey) throw new Error("This member has not enabled encrypted chat yet.");
+      const chatId = await getOrCreateDirectChat(profile.uid);
       activeChat = chatId;
       if (!identity) identity = await getOrCreateIdentity(currentUser.uid);
       await setDoc(doc(db, "directChats", chatId, "readStates", currentUser.uid), {
@@ -629,12 +656,13 @@ export function initializeSocialFeatures({ app, auth, db }) {
     if (!plaintext || !activeChat || !chatPeerProfile?.encryptionPublicKey) return;
     try {
       const encrypted = await encryptMessage(identity, chatPeerProfile.encryptionPublicKey, activeChat, plaintext);
-      await callables.sendDirectMessage({
-        chatId: activeChat,
+      await addDoc(collection(db, "directChats", activeChat, "messages"), {
+        senderUid: currentUser.uid,
         ciphertext: encrypted.ciphertext,
         nonce: encrypted.nonce,
         algorithm: "ECDH-P256+HKDF-SHA256+AES-256-GCM",
-        clientMessageId: crypto.randomUUID()
+        clientMessageId: crypto.randomUUID(),
+        createdAt: serverTimestamp()
       });
       input.value = "";
     } catch (error) {
@@ -645,7 +673,7 @@ export function initializeSocialFeatures({ app, auth, db }) {
   async function blockActivePeer() {
     if (!chatPeer || !confirm(`Block @${chatPeerProfile?.username || "this person"}? They will no longer be able to contact or match with you.`)) return;
     try {
-      await callables.blockUser({ targetUid: chatPeer });
+      await blockUser(chatPeer);
       stopListener(directMessageListener);
       directMessageListener = null;
       activeChat = null;
@@ -662,9 +690,8 @@ export function initializeSocialFeatures({ app, auth, db }) {
     }
   }
 
-  function openReport(targetUid, roomId = null) {
+  function openReport(targetUid) {
     reportTarget = targetUid;
-    reportRandomRoomId = roomId;
     $("reportReasonInput").value = "";
     $("reportSubmitStatus").textContent = "";
     $("reportDialog").showModal();
@@ -678,202 +705,40 @@ export function initializeSocialFeatures({ app, auth, db }) {
     }
     try {
       const category = $("reportCategoryInput").value;
-      if (reportRandomRoomId) {
-        const submitRandomReport = httpsCallable(functions, "submitRandomChatReport");
-        await submitRandomReport({ roomId: reportRandomRoomId, category, description });
-      } else {
-        await callables.submitUserReport({ targetUid: reportTarget, category, description });
-      }
+      if (!reportTarget || reportTarget === currentUser.uid) throw new Error("Choose a valid member to report.");
+      await addDoc(collection(db, "userReports"), {
+        reporterUid: currentUser.uid,
+        targetUid: reportTarget,
+        category,
+        description,
+        status: "pending",
+        createdAt: serverTimestamp()
+      });
       $("reportDialog").close();
-      alert("Your report was submitted with the details you provided.");
-      await refreshAccountStatus();
+      setStatus("moderationStatus", "Your report was sent for manual review. Reports do not trigger automatic restrictions on the Spark plan.");
     } catch (error) {
       setStatus("reportSubmitStatus", `Report could not be submitted: ${error.message}`, true);
     }
   }
 
-  async function renderRandomMessages(roomId) {
-    stopListener(randomMessageListener);
-    randomMessageListener = onSnapshot(query(
-      collection(db, "randomRooms", roomId, "messages"),
-      orderBy("createdAt", "asc"),
-      limit(100)
-    ), async snapshot => {
-      const container = $("randomChatMessages");
-      container.replaceChildren();
-      for (const message of snapshot.docs) {
-        const data = message.data();
-        const line = document.createElement("div");
-        const label = document.createElement("strong");
-        label.textContent = `${data.senderAlias || "Guest"}: `;
-        line.className = `chatBubble${data.senderAlias === randomAlias ? " mine" : ""}`;
-        line.appendChild(label);
-        const text = document.createElement("span");
-        try {
-          text.textContent = await decryptMessage(identity, randomPeerKey, roomId, data);
-        } catch (error) {
-          console.error("Could not decrypt a random-chat message.", error);
-          text.textContent = "Unable to decrypt this message on this device.";
-        }
-        line.appendChild(text);
-        container.appendChild(line);
-      }
-      container.scrollTop = container.scrollHeight;
-    }, error => setStatus("randomEligibility", error.message, true));
-  }
-
-  function updateRandomTimer(expiresAt) {
-    clearInterval(randomTimer);
-    const deadline = new Date(expiresAt).getTime();
-    const tick = () => {
-      const remaining = Math.max(0, deadline - Date.now());
-      $("randomChatTimer").textContent =
-        `${String(Math.floor(remaining / 60000)).padStart(2, "0")}:${String(Math.floor((remaining % 60000) / 1000)).padStart(2, "0")}`;
-      if (remaining === 0) endRandomChat(true).catch(error => setStatus("randomEligibility", error.message, true));
-    };
-    tick();
-    randomTimer = setInterval(tick, 1000);
-  }
-
-  async function startRandomChat() {
-    try {
-      $("startRandomChatBtn").disabled = true;
-      const result = await callables.findRandomChat({ encryptionPublicKey: identity.publicKey });
-      randomRoomId = result.data.roomId;
-      randomPeerKey = result.data.peerEncryptionPublicKey || null;
-      randomAlias = result.data.alias;
-      randomActive = result.data.status === "active";
-      randomMessagesSubscribed = false;
-      $("randomChatPanel").hidden = false;
-      $("randomChatEndPanel").hidden = true;
-      $("randomChatMessages").replaceChildren();
-      $("randomChatTimer").textContent = result.data.status === "active" ? "05:00" : "Finding someone…";
-      updateRandomTimer(result.data.expiresAt);
-      setStatus("randomEligibility", result.data.status === "waiting" ? "Looking for an available chat partner…" : `Connected as ${result.data.alias}.`);
-      stopListener(randomRoomListener);
-      randomRoomListener = onSnapshot(doc(db, "randomRooms", randomRoomId), async snapshot => {
-        const data = snapshot.data();
-        if (!data) return;
-        if (data.status === "active" && !randomPeerKey) {
-          const updated = await callables.findRandomChat({ encryptionPublicKey: identity.publicKey });
-          randomPeerKey = updated.data.peerEncryptionPublicKey || null;
-        }
-        if (data.status === "active" && randomPeerKey) {
-          randomActive = true;
-          setStatus("randomEligibility", `Connected as ${result.data.alias}. Your username is hidden.`);
-          if (!randomMessagesSubscribed) {
-            updateRandomTimer(data.expiresAt.toDate().toISOString());
-            randomMessagesSubscribed = true;
-            await renderRandomMessages(randomRoomId);
-          }
-        } else if (data.status === "closed" || new Date(data.expiresAt.toDate()).getTime() <= Date.now()) {
-          await endRandomChat(false);
-        }
-      }, error => setStatus("randomEligibility", error.message, true));
-    } catch (error) {
-      setStatus("randomEligibility", error.message, true);
-      $("startRandomChatBtn").disabled = false;
-      await refreshAccountStatus();
-    }
-  }
-
-  async function sendRandomMessage() {
-    const plaintext = $("randomMessageInput").value.trim();
-    if (!plaintext || !randomRoomId || !randomPeerKey) return;
-    try {
-      const encrypted = await encryptMessage(identity, randomPeerKey, randomRoomId, plaintext);
-      await callables.sendRandomChatMessage({
-        roomId: randomRoomId,
-        ciphertext: encrypted.ciphertext,
-        nonce: encrypted.nonce
-      });
-      $("randomMessageInput").value = "";
-    } catch (error) {
-      setStatus("randomEligibility", `Message not sent: ${error.message}`, true);
-    }
-  }
-
-  async function endRandomChat(callServer) {
-    clearInterval(randomTimer);
-    stopListener(randomRoomListener);
-    stopListener(randomMessageListener);
-    randomRoomListener = null;
-    randomMessageListener = null;
-    if (callServer && randomRoomId) {
-      try { await callables.leaveRandomChat({ roomId: randomRoomId }); }
-      catch (error) { console.error("Could not close random chat cleanly.", error); }
-    }
-    $("randomChatEndPanel").hidden = false;
-    $("startRandomChatBtn").disabled = false;
-    $("randomMessageInput").disabled = true;
-    $("sendRandomMessageBtn").disabled = true;
-    randomActive = false;
-    setStatus("randomEligibility", "This anonymous chat has ended.");
-    randomPeerKey = null;
-  }
-
-  async function setRandomShare(share) {
-    if (!randomRoomId) return;
-    const roomId = randomRoomId;
-    try {
-      const result = await callables.shareRandomUsername({ roomId, share });
-      setStatus("randomShareStatus", share ? "Your username has been shared with this person." : "Your username was not shared.");
-      const checkForPeerShare = async () => {
-        const status = await callables.getRandomChatStatus({ roomId });
-        if (status.data.peerUsername) {
-          setStatus("randomShareStatus", `${share ? "Your username has been shared." : "You stayed anonymous."} They also shared @${status.data.peerUsername}.`);
-          if (randomRoomId === roomId) randomRoomId = null;
-          $("startRandomChatBtn").disabled = false;
-          return true;
-        }
-        return false;
-      };
-      if (result.data.peerUsername) {
-        setStatus("randomShareStatus", `${share ? "Your username has been shared." : "You stayed anonymous."} They also shared @${result.data.peerUsername}.`);
-        if (randomRoomId === roomId) randomRoomId = null;
-        $("startRandomChatBtn").disabled = false;
-      } else {
-        await checkForPeerShare();
-        if (share) {
-          let attempts = 0;
-          const poll = setInterval(async () => {
-            attempts++;
-            try {
-              if (await checkForPeerShare() || attempts >= 20) clearInterval(poll);
-            } catch (error) {
-              clearInterval(poll);
-              setStatus("randomShareStatus", error.message, true);
-            }
-          }, 1500);
-        } else {
-          if (randomRoomId === roomId) randomRoomId = null;
-          $("startRandomChatBtn").disabled = false;
-        }
-      }
-    } catch (error) {
-      setStatus("randomShareStatus", error.message, true);
-    }
+  function startRandomChat() {
+    setStatus("randomEligibility", "Anonymous matching is paused on Firebase Spark because a trusted server is required to protect participant identity and enforce the five-minute room limit.");
   }
 
   async function refreshAccountStatus(statusId = "moderationStatus") {
     if (!currentUser) return;
     try {
       const status = await readAccountStatus();
-      $("appealPanel").hidden = !status.banned && !status.randomChatSuspended;
-      $("startRandomChatBtn").disabled = Boolean(status.banned || status.randomChatSuspended || randomActive);
+      $("appealPanel").hidden = !status.banned;
+      $("startRandomChatBtn").disabled = true;
       if (status.banned) {
-        setStatus("moderationStatus", "Your account is banned. You can sign in and submit an appeal for review. Reinstatement is not guaranteed.");
+        setStatus("moderationStatus", "Account status is reviewed manually on the Firebase Spark plan. Contact support to appeal or request a review.");
       } else if (status.deactivated) {
         setStatus("moderationStatus", "Your account is deactivated. Sign out and sign back in to reactivate it.");
-      } else if (status.randomChatSuspended) {
-        setStatus("moderationStatus", `Gentle warning: multiple safety reports have temporarily paused random chat until ${new Date(status.randomChatSuspendedUntil).toLocaleString()}. You can appeal this decision.`);
       } else {
-        setStatus("moderationStatus", "Your account is in good standing. Reports are reviewed; a report is not proof by itself.");
+        setStatus("moderationStatus", "Safety reports are sent for manual review. Firebase Spark cannot safely count reports or apply automatic warnings and bans.");
       }
-      setStatus("randomEligibility", status.banned
-        ? "Random chat is unavailable while your account is banned."
-        : status.deactivated ? "Random chat is unavailable while your account is deactivated."
-          : status.randomChatSuspended ? "Random chat is paused for your account." : "");
+      setStatus("randomEligibility", "Anonymous matching is paused on Firebase Spark; it requires a trusted server for safe matching, identity privacy, and room expiry.");
     } catch (error) {
       console.error("Could not load account status.", error);
       setStatus(statusId, "Safety status will appear here when available. Protected actions are checked before they complete.");
@@ -929,7 +794,7 @@ export function initializeSocialFeatures({ app, auth, db }) {
   async function connectToSelectedProfile() {
     if (!selectedPublicProfile || selectedPublicProfile.uid === currentUser.uid) return;
     try {
-      await callables.sendConnectionRequest({ recipientUid: selectedPublicProfile.uid });
+      await sendConnectionRequest(selectedPublicProfile.uid);
       $("connectPublicProfileBtn").disabled = true;
       $("connectPublicProfileBtn").textContent = "Request sent";
       setStatus("peopleSearchStatus", `Connection request sent to @${selectedPublicProfile.username}.`);
@@ -942,7 +807,7 @@ export function initializeSocialFeatures({ app, auth, db }) {
     if (!selectedPublicProfile || selectedPublicProfile.uid === currentUser.uid) return;
     if (!confirm(`Block @${selectedPublicProfile.username}? They will not be able to connect or match with you.`)) return;
     try {
-      await callables.blockUser({ targetUid: selectedPublicProfile.uid });
+      await blockUser(selectedPublicProfile.uid);
       $("publicUserProfile").hidden = true;
       setStatus("peopleSearchStatus", `@${selectedPublicProfile.username} is blocked.`);
     } catch (error) {
@@ -1371,30 +1236,37 @@ export function initializeSocialFeatures({ app, auth, db }) {
 
   async function sendAppeal() {
     const explanation = $("appealMessage").value.trim();
+    if (explanation.length < 10) {
+      setStatus("appealStatus", "Please include at least 10 characters explaining your request.", true);
+      return;
+    }
     try {
-      await callables.submitModerationAppeal({ explanation });
+      await addDoc(collection(db, "moderationAppeals"), {
+        userId: currentUser.uid,
+        explanation,
+        createdAt: serverTimestamp()
+      });
       $("appealMessage").value = "";
-      setStatus("appealStatus", "Your appeal has been submitted for review. Reinstatement is not guaranteed.");
+      setStatus("appealStatus", "Your appeal was submitted for manual review. Reinstatement is not guaranteed.");
     } catch (error) {
-      setStatus("appealStatus", error.message, true);
+      setStatus("appealStatus", `Appeal could not be submitted: ${error.message}`, true);
     }
   }
 
-  function emailAppeal() {
-    const explanation = $("appealMessage").value.trim();
+  function emailAppeal(explanation = $("appealMessage").value.trim()) {
     const accountEmail = currentUser?.email || "";
     const subject = encodeURIComponent("MAWAESU account restriction appeal");
     const body = encodeURIComponent(
-      `Account email: ${accountEmail}\n\nMy appeal:\n${explanation || "[Please explain why you are appealing.]"}\n\nI understand the decision may be upheld or changed after review.`
+      `Account email: ${accountEmail}\n\nMy appeal or safety concern:\n${explanation || "[Please explain your request.]"}\n\nMAWAESU reviews requests manually.`
     );
     window.location.href = `mailto:mawaesu.toknowyou@gmail.com?subject=${subject}&body=${body}`;
+    setStatus("appealStatus", "Your email app was opened so you can send your request to support.");
   }
 
   async function openCommunity(pageId) {
     if (!currentUser) return;
     listeners.forEach(stopListener);
     listeners = [];
-    clearChatPreviewListeners();
     if (pageId !== "mainMenuPage") {
       stopListener(noteFeedListener);
       stopListener(featuredFeedListener);
@@ -1449,12 +1321,13 @@ export function initializeSocialFeatures({ app, auth, db }) {
   $("cancelReportBtn").addEventListener("click", () => $("reportDialog").close());
   $("submitReportBtn").addEventListener("click", submitReport);
   $("startRandomChatBtn").addEventListener("click", startRandomChat);
-  $("sendRandomMessageBtn").addEventListener("click", sendRandomMessage);
-  $("randomMessageInput").addEventListener("keydown", event => { if (event.key === "Enter") sendRandomMessage(); });
-  $("leaveRandomChatBtn").addEventListener("click", () => endRandomChat(true));
-  $("reportRandomPeerBtn").addEventListener("click", () => openReport(null, randomRoomId));
-  $("shareRandomUsernameBtn").addEventListener("click", () => setRandomShare(true));
-  $("keepRandomAnonymousBtn").addEventListener("click", () => setRandomShare(false));
+  $("randomMessageInput").disabled = true;
+  $("sendRandomMessageBtn").disabled = true;
+  $("leaveRandomChatBtn").disabled = true;
+  $("reportRandomPeerBtn").disabled = true;
+  $("shareRandomUsernameBtn").disabled = true;
+  $("keepRandomAnonymousBtn").disabled = true;
+  $("randomEligibility").textContent = "Anonymous matching is paused on Firebase Spark; it requires a trusted server for safe matching, identity privacy, and room expiry.";
   $("publishNoteBtn").addEventListener("click", publishNote);
   $("sendAppealBtn").addEventListener("click", sendAppeal);
   $("emailAppealBtn").addEventListener("click", emailAppeal);
@@ -1473,34 +1346,19 @@ export function initializeSocialFeatures({ app, auth, db }) {
     window.showPage("searchPage");
     void openPublicProfile(event.detail);
   });
-  document.addEventListener("mawaesu-random-ended", () => {
-    $("randomChatPanel").hidden = false;
-    $("randomChatEndPanel").hidden = false;
-  });
-
-  document.addEventListener("visibilitychange", () => {
-    if (document.hidden) return;
-    if (randomRoomId && !$("randomChatPanel").hidden) {
-      $("randomMessageInput").disabled = false;
-      $("sendRandomMessageBtn").disabled = false;
-    }
-  });
-
   onAuthStateChanged(auth, async user => {
       clearListeners();
       currentUser = user;
       identity = null;
       myProfile = null;
       activeChat = null;
-      randomRoomId = null;
-      randomPeerKey = null;
       chatPeer = null;
       chatPeerProfile = null;
       $("chatMessageInput").disabled = true;
       $("sendChatMessageBtn").disabled = true;
-      $("randomMessageInput").disabled = false;
-      $("sendRandomMessageBtn").disabled = false;
-      $("startRandomChatBtn").disabled = false;
+      $("randomMessageInput").disabled = true;
+      $("sendRandomMessageBtn").disabled = true;
+      $("startRandomChatBtn").disabled = true;
       $("randomChatPanel").hidden = true;
       $("appealPanel").hidden = true;
       if (!user) return;
@@ -1515,17 +1373,28 @@ export function initializeSocialFeatures({ app, auth, db }) {
   return {
     publishProfile,
     getAccountStatus: readAccountStatus,
-    reactivateAccount: () => callables.reactivateAccount({}),
-    deactivateAccount: () => callables.deactivateAccount({}),
-    deleteAccount: async () => {
-      const result = await callables.deleteAccount({});
-      try {
-        await deleteIdentity(currentUser.uid);
-      } catch (error) {
-        console.error("The account was deleted, but its local encryption key could not be removed.", error);
-        setStatus("accountActionStatus", `Your account was deleted, but its encryption key could not be cleared from this device: ${error.message}`, true);
+    reactivateAccount: async () => updateDoc(doc(db, "accountStatuses", currentUser.uid), {
+      deactivated: false,
+      updatedAt: serverTimestamp()
+    }),
+    deactivateAccount: async () => {
+      const profileRef = doc(db, "publicProfiles", currentUser.uid);
+      const profile = await getDoc(profileRef);
+      if (profile.exists()) {
+        await updateDoc(profileRef, {
+          active: false,
+          updatedAt: serverTimestamp()
+        });
       }
-      return result;
+      await setDoc(doc(db, "accountStatuses", currentUser.uid), {
+        deactivated: true,
+        updatedAt: serverTimestamp()
+      });
+    },
+    requestAccountDeletion: () => {
+      const subject = encodeURIComponent("MAWAESU account deletion request");
+      const body = encodeURIComponent(`Account email: ${currentUser?.email || ""}\n\nPlease review my request to permanently delete my MAWAESU account and associated data.`);
+      window.location.href = `mailto:mawaesu.toknowyou@gmail.com?subject=${subject}&body=${body}`;
     },
     getIdentity: async () => identity || (identity = await getOrCreateIdentity(currentUser.uid))
   };

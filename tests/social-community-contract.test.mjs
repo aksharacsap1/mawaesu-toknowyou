@@ -56,16 +56,14 @@ test("private saves and conversation read markers are owner-restricted", () => {
   assert.match(rules, /match \/readStates\/\{uid\} \{[\s\S]*?allow read: if isSelf\(uid\) && canReadChat\(chatId\)/);
   assert.match(rules, /allow create, update: if isSelf\(uid\) && canReadChat\(chatId\)[\s\S]*?lastReadAt == request\.time/);
   assert.match(social, /className = "unreadIndicator"/);
-  assert.match(social, /decryptMessage\(identity, profile\.encryptionPublicKey, chat\.id, message\)/);
-  assert.match(functions, /where\("featuredByUserId", "==", uid\)/);
+  assert.match(social, /decryptMessage\(identity, profile\.encryptionPublicKey, chatId, data\)/);
 });
 
 test("community avatars use built-in selectable designs without image hosting", () => {
   assert.match(html, /id="avatarChoices"[\s\S]*?role="group"/);
   assert.match(html, /Choose an illustrated avatar/);
-  assert.match(social, /updatePublicProfile\(\{[\s\S]*?avatarId/);
+  assert.match(social, /avatarId,[\s\S]*?encryptionPublicKey: identity\.publicKey/);
   assert.match(social, /getAvatarOption\(profile\.avatarId\)/);
-  assert.match(functions, /data\.avatarId[\s\S]*?available illustrated avatars/);
   assert.match(avatars, /id: "leaf"/);
   assert.doesNotMatch(html + social, /firebase-storage\.js|uploadBytes|getDownloadURL|uploadAvatar/);
   assert.doesNotMatch(firebaseConfig, /"storage"\s*:/);
@@ -87,7 +85,7 @@ test("account status works without a callable and handles partial moderation rec
   assert.doesNotMatch(social, /httpsCallable\(functions, "getAccountStatus"\)/);
   assert.match(rules, /match \/moderationCounters\/\{uid\} \{\s*allow read: if isSelf\(uid\);\s*allow write: if false;/);
   assert.ok(rules.includes("!('banned' in get(/databases/$(database)/documents/moderationCounters/$(uid)).data.keys())"));
-  assert.match(rules, /match \/accountStatuses\/\{uid\} \{[\s\S]*?allow update: if isSelf\(uid\)[\s\S]*?deactivated == false/);
+  assert.match(rules, /match \/accountStatuses\/\{uid\} \{[\s\S]*?allow create: if isSelf\(uid\)[\s\S]*?deactivated == true[\s\S]*?allow update: if isSelf\(uid\)[\s\S]*?deactivated is bool/);
 });
 
 test("navigation targets exist and community tabs dispatch section loads", () => {
@@ -101,10 +99,20 @@ test("navigation targets exist and community tabs dispatch section loads", () =>
   assert.match(html, /const navigationPage = pageId === "roomIntroPage" \|\| pageId === "roomAnalysisPage" \? "profilePage" : pageId/);
 });
 
-test("unavailable social callables produce an actionable message instead of raw internal errors", () => {
-  assert.match(social, /(?:functions\/)?(?:internal\|not-found\|unavailable)/);
-  assert.match(social, /This social feature is temporarily unavailable/);
-  assert.match(social, /\\binternal\\b\|functions/);
+test("Spark deployment removes callable dependencies and disables unsafe anonymous matching", () => {
+  assert.doesNotMatch(social, /httpsCallable|getFunctions|firebase-functions\.js|callables\./);
+  assert.doesNotMatch(firebaseConfig, /"functions"\s*:/);
+  assert.match(social, /transaction\.set\(profileRef/);
+  assert.match(social, /await addDoc\(collection\(db, "directChats", activeChat, "messages"\)/);
+  assert.match(social, /async function sendConnectionRequest/);
+  assert.match(social, /async function directChatId\(currentUid, peerUid\)/);
+  assert.match(social, /Anonymous matching is paused on Firebase Spark/);
+  assert.match(html, /id="startRandomChatBtn"[^>]*disabled/);
+  assert.match(html, /Safety reports and appeals are reviewed manually/);
+  assert.match(rules, /match \/userReports\/\{reportId\}/);
+  assert.match(rules, /match \/moderationAppeals\/\{appealId\}/);
+  assert.match(rules, /match \/connections\/\{uid\}\/users\/\{otherUid\}/);
+  assert.match(rules, /getAfter\(\/databases\/\$\(database\)\/documents\/connectionRequests/);
 });
 
 test("account-status read failures do not block notes or expose Firebase internals", () => {
