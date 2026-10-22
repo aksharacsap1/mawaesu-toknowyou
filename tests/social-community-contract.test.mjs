@@ -2,15 +2,17 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [html, social, rules, indexes, functions, firebaseConfig, avatars] = await Promise.all([
+const [html, social, rules, indexes, functions, firebaseConfig, avatars, shareCardSource] = await Promise.all([
   readFile(new URL("../public/index.html", import.meta.url), "utf8"),
   readFile(new URL("../public/social.js", import.meta.url), "utf8"),
   readFile(new URL("../firestore.rules", import.meta.url), "utf8"),
   readFile(new URL("../firestore.indexes.json", import.meta.url), "utf8"),
   readFile(new URL("../functions/index.js", import.meta.url), "utf8"),
   readFile(new URL("../firebase.json", import.meta.url), "utf8"),
-  readFile(new URL("../public/avatars.js", import.meta.url), "utf8")
+  readFile(new URL("../public/avatars.js", import.meta.url), "utf8"),
+  readFile(new URL("../public/share-card.js", import.meta.url), "utf8")
 ]);
+const { getSpatialVibe } = await import(`data:text/javascript;base64,${Buffer.from(shareCardSource).toString("base64")}`);
 
 test("community navigation and private/public profile collections are distinct", () => {
   const navigation = html.match(/<nav id="appNavigation"[\s\S]*?<\/nav>/)?.[0];
@@ -122,4 +124,19 @@ test("account-status read failures do not block notes or expose Firebase interna
   assert.match(social, /Safety status will appear here when available/);
   assert.match(html, /Safety status could not be checked right now/);
   assert.doesNotMatch(html, /Your account status could not be checked: \$\{accountStatusError\}/);
+});
+
+test("quiz results create a branded, downloadable share card with three-word vibes", () => {
+  for (const id of ["flexCardPreview", "downloadFlexCardBtn", "shareInstagramBtn", "shareXBtn", "sharePinterestBtn"]) {
+    assert.match(html, new RegExp(`id="${id}"`));
+  }
+  assert.match(html, /void renderFlexCard\(stored\[0\]\)/);
+  assert.match(shareCardSource, /canvas\.toBlob[\s\S]*?"image\/png"/);
+  assert.match(shareCardSource, /siteUrl\.replace/);
+  assert.match(shareCardSource, /navigator\.canShare\?\.\(\{ files: \[file\] \}\)/);
+  assert.match(shareCardSource, /twitter\.com\/intent\/tweet/);
+
+  for (const archetype of ["🌿 The Gentle Healer", "🌙 The Wounded Dreamer", "🌟 The Luminous Soul"]) {
+    assert.equal(getSpatialVibe(archetype).split(" · ").length, 3);
+  }
 });
