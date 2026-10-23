@@ -721,16 +721,11 @@ export function initializeSocialFeatures({ auth, db }) {
     }
   }
 
-  function startRandomChat() {
-    setStatus("randomEligibility", "Anonymous matching is paused on Firebase Spark because a trusted server is required to protect participant identity and enforce the five-minute room limit.");
-  }
-
   async function refreshAccountStatus(statusId = "moderationStatus") {
     if (!currentUser) return;
     try {
       const status = await readAccountStatus();
       $("appealPanel").hidden = !status.banned;
-      $("startRandomChatBtn").disabled = true;
       if (status.banned) {
         setStatus("moderationStatus", "Account status is reviewed manually on the Firebase Spark plan. Contact support to appeal or request a review.");
       } else if (status.deactivated) {
@@ -738,7 +733,6 @@ export function initializeSocialFeatures({ auth, db }) {
       } else {
         setStatus("moderationStatus", "Safety reports are sent for manual review. Firebase Spark cannot safely count reports or apply automatic warnings and bans.");
       }
-      setStatus("randomEligibility", "Anonymous matching is paused on Firebase Spark; it requires a trusted server for safe matching, identity privacy, and room expiry.");
     } catch (error) {
       console.error("Could not load account status.", error);
       setStatus(statusId, "Safety status will appear here when available. Protected actions are checked before they complete.");
@@ -1320,14 +1314,6 @@ export function initializeSocialFeatures({ auth, db }) {
   $("reportChatPeerBtn").addEventListener("click", () => openReport(chatPeer));
   $("cancelReportBtn").addEventListener("click", () => $("reportDialog").close());
   $("submitReportBtn").addEventListener("click", submitReport);
-  $("startRandomChatBtn").addEventListener("click", startRandomChat);
-  $("randomMessageInput").disabled = true;
-  $("sendRandomMessageBtn").disabled = true;
-  $("leaveRandomChatBtn").disabled = true;
-  $("reportRandomPeerBtn").disabled = true;
-  $("shareRandomUsernameBtn").disabled = true;
-  $("keepRandomAnonymousBtn").disabled = true;
-  $("randomEligibility").textContent = "Anonymous matching is paused on Firebase Spark; it requires a trusted server for safe matching, identity privacy, and room expiry.";
   $("publishNoteBtn").addEventListener("click", publishNote);
   $("sendAppealBtn").addEventListener("click", sendAppeal);
   $("emailAppealBtn").addEventListener("click", emailAppeal);
@@ -1356,10 +1342,6 @@ export function initializeSocialFeatures({ auth, db }) {
       chatPeerProfile = null;
       $("chatMessageInput").disabled = true;
       $("sendChatMessageBtn").disabled = true;
-      $("randomMessageInput").disabled = true;
-      $("sendRandomMessageBtn").disabled = true;
-      $("startRandomChatBtn").disabled = true;
-      $("randomChatPanel").hidden = true;
       $("appealPanel").hidden = true;
       if (!user) return;
       try {

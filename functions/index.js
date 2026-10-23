@@ -10,8 +10,6 @@ initializeApp();
 const db = getFirestore();
 const REGION = "us-central1";
 const DAY_MS = 24 * 60 * 60 * 1000;
-const RANDOM_ROOM_MS = 5 * 60 * 1000;
-const RANDOM_METADATA_RETENTION_MS = DAY_MS;
 const REPORT_WINDOW_MS = DAY_MS;
 
 function fail(code, message) {
@@ -133,10 +131,6 @@ function connectionRequestId(senderUid, recipientUid) {
     .digest("hex");
 }
 
-function randomAlias() {
-  return `Guest-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
-}
-
 function rateRef(uid, action, bucket) {
   const id = crypto.createHash("sha256").update(JSON.stringify([uid, action, bucket])).digest("hex");
   return db.collection("callableRateLimits").doc(id);
@@ -172,25 +166,6 @@ async function assertNotBanned(tx, uid) {
     fail("permission-denied", "This account is deactivated. Sign in again to reactivate it.");
   }
   return snapshot.exists ? snapshot.data() : {};
-}
-
-async function assertRandomAccess(tx, uid) {
-  if (!(await canRandomAccess(tx, uid))) {
-    fail("permission-denied", "Random chat access is temporarily suspended.");
-  }
-}
-
-async function canRandomAccess(tx, uid) {
-  const [snapshot, accountStatus] = await Promise.all([
-    tx.get(db.collection("moderationCounters").doc(uid)),
-    tx.get(db.collection("accountStatuses").doc(uid)),
-  ]);
-  if (accountStatus.exists && accountStatus.data().deactivated === true) return false;
-  if (!snapshot.exists) return true;
-  const moderation = snapshot.data();
-  return moderation.banned !== true &&
-    !(moderation.randomChatSuspendedUntil &&
-      moderation.randomChatSuspendedUntil.toMillis() > Date.now());
 }
 
 async function getPairStatus(tx, uidA, uidB) {
@@ -272,12 +247,9 @@ exports.getAccountStatus = onCall({ region: REGION }, async (request) => {
     db.collection("accountStatuses").doc(uid).get(),
   ]);
   const moderation = snapshot.exists ? snapshot.data() : {};
-  const suspendedUntil = moderation.randomChatSuspendedUntil || null;
   return {
     banned: moderation.banned === true,
     deactivated: accountStatus.exists && accountStatus.data().deactivated === true,
-    randomChatSuspended: Boolean(suspendedUntil && suspendedUntil.toMillis() > Date.now()),
-    randomChatSuspendedUntil: suspendedUntil ? suspendedUntil.toDate().toISOString() : null,
   };
 });
 
@@ -389,27 +361,13 @@ exports.blockUser = onCall({ region: REGION }, async (request) => {
       db.collection("connectionRequests").doc(connectionRequestId(uid, targetUid)),
       db.collection("connectionRequests").doc(connectionRequestId(targetUid, uid)),
     ];
-    const [ownSnap, requestDocs, ownRooms, targetRooms] = await Promise.all([
+    const [ownSnap, requestDocs] = await Promise.all([
       tx.get(ownBlock),
       Promise.all(requestRefs.map((ref) => tx.get(ref))),
-      tx.get(db.collectionGroup("members")
-        .where("uid", "==", uid).where("expiresAt", ">", Timestamp.now()).limit(20)),
-      tx.get(db.collectionGroup("members")
-        .where("uid", "==", targetUid).where("expiresAt", ">", Timestamp.now()).limit(20)),
     ]);
-    const ownRoomIds = new Set(ownRooms.docs.map((doc) => doc.ref.parent.parent.id));
-    const sharedRoomRefs = targetRooms.docs
-      .filter((doc) => ownRoomIds.has(doc.ref.parent.parent.id))
-      .map((doc) => db.collection("randomRooms").doc(doc.ref.parent.parent.id));
-    const sharedRooms = await Promise.all(sharedRoomRefs.map((ref) => tx.get(ref)));
     if (!ownSnap.exists) tx.set(ownBlock, { createdAt: FieldValue.serverTimestamp() });
     tx.delete(db.doc(`connections/${uid}/users/${targetUid}`));
     tx.delete(db.doc(`connections/${targetUid}/users/${uid}`));
-    for (const room of sharedRooms) {
-      if (room.exists && ["waiting", "active"].includes(room.data().status)) {
-        tx.update(room.ref, { status: "closed", closedAt: FieldValue.serverTimestamp() });
-      }
-    }
     for (const item of requestDocs) {
       if (item.exists && item.data().status === "pending") {
         tx.update(item.ref, { status: "cancelled", respondedAt: FieldValue.serverTimestamp() });
@@ -505,269 +463,6 @@ exports.sendDirectMessage = onCall({ region: REGION }, async (request) => {
   return { messageId };
 });
 
-exports.findRandomChat = onCall({ region: REGION }, async (request) => {
-  const uid = requireAuth(request);
-  const data = inputObject(request.data);
-  onlyKeys(data, ["encryptionPublicKey"]);
-  const publicKey = validatePublicJwk(data.encryptionPublicKey);
-  if (!publicKey) fail("invalid-argument", "encryptionPublicKey is required.");
-  const now = Date.now();
-  const expiresAt = Timestamp.fromMillis(now + RANDOM_ROOM_MS);
-  const queueRef = db.collection("randomMatchQueue").doc(uid);
-  const newRoomRef = db.collection("randomRooms").doc();
-  let result;
-
-  await consumeRateLimit(uid, "findRandomChat", 30, 60 * 1000);
-  await db.runTransaction(async (tx) => {
-    await assertRandomAccess(tx, uid);
-    const ownQueue = await tx.get(queueRef);
-    let clearStaleQueue = false;
-    if (ownQueue.exists && ownQueue.data().expiresAt.toMillis() > now) {
-      const existingRoom = db.collection("randomRooms").doc(ownQueue.data().roomId);
-      const roomSnap = await tx.get(existingRoom);
-      if (roomSnap.exists && ["waiting", "active"].includes(roomSnap.data().status) &&
-          roomSnap.data().expiresAt.toMillis() > now) {
-        const response = {
-          roomId: existingRoom.id,
-          status: roomSnap.data().status,
-          alias: ownQueue.data().alias,
-          expiresAt: roomSnap.data().expiresAt.toDate().toISOString(),
-        };
-        if (roomSnap.data().status === "active") {
-          const roomMembers = await tx.get(existingRoom.collection("members").limit(2));
-          const peer = roomMembers.docs.find((member) => member.id !== uid);
-          if (peer && peer.data().encryptionPublicKey) {
-            response.peerEncryptionPublicKey = peer.data().encryptionPublicKey;
-          }
-        } else if (roomSnap.data().status === "waiting") {
-          const ownMemberRef = existingRoom.collection("members").doc(uid);
-          const ownMember = await tx.get(ownMemberRef);
-          if (ownMember.exists) {
-            tx.update(ownMemberRef, { encryptionPublicKey: publicKey });
-            tx.update(queueRef, { encryptionPublicKey: publicKey });
-          }
-        }
-        result = response;
-        return;
-      }
-      clearStaleQueue = true;
-    }
-
-    const waiting = await tx.get(db.collection("randomMatchQueue")
-      .where("status", "==", "waiting")
-      .limit(20));
-    const candidates = [];
-    for (const queued of waiting.docs) {
-      const otherUid = queued.id;
-      if (otherUid === uid) continue;
-      const roomRef = db.collection("randomRooms").doc(queued.data().roomId);
-      const roomSnap = await tx.get(roomRef);
-      if (!roomSnap.exists || roomSnap.data().status !== "waiting" ||
-          roomSnap.data().expiresAt.toMillis() <= now) continue;
-      const queuedMember = await tx.get(roomRef.collection("members").doc(otherUid));
-      if (!queuedMember.exists || !queuedMember.data().encryptionPublicKey) continue;
-      const pair = await getPairStatus(tx, uid, otherUid);
-      if (pair.blocked || pair.connected) continue;
-      if (!(await canRandomAccess(tx, otherUid))) continue;
-      candidates.push({ queued, roomRef, room: roomSnap.data(), member: queuedMember.data() });
-    }
-
-    if (candidates.length) {
-      const candidate = candidates[crypto.randomInt(candidates.length)];
-      const alias = randomAlias();
-      const matchedExpiresAt = Timestamp.fromMillis(now + RANDOM_ROOM_MS);
-      const cleanupAt = Timestamp.fromMillis(now + RANDOM_ROOM_MS + RANDOM_METADATA_RETENTION_MS);
-      tx.update(candidate.roomRef, {
-        status: "active",
-        expiresAt: matchedExpiresAt,
-        cleanupAt,
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-      tx.update(candidate.roomRef.collection("members").doc(candidate.queued.id), {
-        expiresAt: cleanupAt,
-        cleanupAt,
-      });
-      tx.create(db.doc(`randomRooms/${candidate.roomRef.id}/members/${uid}`), {
-        uid,
-        alias,
-        encryptionPublicKey: publicKey,
-        usernameSharing: false,
-        joinedAt: FieldValue.serverTimestamp(),
-        expiresAt: cleanupAt,
-        cleanupAt,
-      });
-      tx.update(candidate.queued.ref, {
-        status: "matched",
-        expiresAt: matchedExpiresAt,
-        matchedAt: FieldValue.serverTimestamp(),
-      });
-      tx.set(queueRef, {
-        roomId: candidate.roomRef.id,
-        status: "matched",
-        alias,
-        encryptionPublicKey: publicKey,
-        expiresAt: matchedExpiresAt,
-      });
-      result = {
-        roomId: candidate.roomRef.id,
-        status: "active",
-        alias,
-        peerEncryptionPublicKey: candidate.member.encryptionPublicKey,
-        expiresAt: matchedExpiresAt.toDate().toISOString(),
-      };
-      return;
-    }
-
-    if (clearStaleQueue) tx.delete(queueRef);
-    const alias = randomAlias();
-    const cleanupAt = Timestamp.fromMillis(now + RANDOM_ROOM_MS + RANDOM_METADATA_RETENTION_MS);
-    tx.create(newRoomRef, { status: "waiting", expiresAt, cleanupAt, createdAt: FieldValue.serverTimestamp() });
-    tx.create(db.doc(`randomRooms/${newRoomRef.id}/members/${uid}`), {
-      uid,
-      alias,
-      encryptionPublicKey: publicKey,
-      usernameSharing: false,
-      joinedAt: FieldValue.serverTimestamp(),
-      expiresAt: cleanupAt,
-      cleanupAt,
-    });
-    tx.set(queueRef, {
-      roomId: newRoomRef.id,
-      status: "waiting",
-      alias,
-      encryptionPublicKey: publicKey,
-      expiresAt,
-    });
-    result = { roomId: newRoomRef.id, status: "waiting", alias, expiresAt: expiresAt.toDate().toISOString() };
-  });
-  return result;
-});
-
-exports.sendRandomChatMessage = onCall({ region: REGION }, async (request) => {
-  const uid = requireAuth(request);
-  const data = inputObject(request.data);
-  onlyKeys(data, ["roomId", "ciphertext", "nonce", "algorithm"]);
-  const roomId = documentId(data, "roomId");
-  const ciphertext = stringField(data, "ciphertext", 1, 20000);
-  const nonce = stringField(data, "nonce", 1, 512);
-  const algorithm = optionalString(data, "algorithm", 64);
-  const roomRef = db.collection("randomRooms").doc(roomId);
-  const messageRef = roomRef.collection("messages").doc();
-  await consumeRateLimit(uid, "randomMessage", 60, 60 * 1000);
-  await db.runTransaction(async (tx) => {
-    await assertRandomAccess(tx, uid);
-    const [room, member, queue] = await Promise.all([
-      tx.get(roomRef),
-      tx.get(roomRef.collection("members").doc(uid)),
-      tx.get(db.collection("randomMatchQueue").doc(uid)),
-    ]);
-    if (!room.exists || room.data().status !== "active" ||
-        room.data().expiresAt.toMillis() <= Date.now() || !member.exists) {
-      fail("failed-precondition", "This random chat has expired or is unavailable.");
-    }
-    const otherMember = await tx.get(roomRef.collection("members").limit(2));
-    const otherUid = otherMember.docs.map((doc) => doc.id).find((id) => id !== uid);
-    if (!otherUid) fail("failed-precondition", "This random chat is unavailable.");
-    const pairAllowed = await assertPairAllowed(tx, uid, otherUid);
-    if (pairAllowed) fail("permission-denied", "This user is unavailable.");
-    tx.create(messageRef, {
-      senderAlias: member.data().alias,
-      ciphertext,
-      nonce,
-      algorithm,
-      createdAt: FieldValue.serverTimestamp(),
-      expiresAt: room.data().expiresAt,
-    });
-    if (queue.exists && queue.data().roomId === roomId && queue.data().expiresAt.toMillis() <= Date.now()) {
-      tx.delete(queue.ref);
-    }
-  });
-  return { messageId: messageRef.id };
-});
-
-exports.shareRandomUsername = onCall({ region: REGION }, async (request) => {
-  const uid = requireAuth(request);
-  const data = inputObject(request.data);
-  onlyKeys(data, ["roomId", "share"]);
-  const roomId = documentId(data, "roomId");
-  if (typeof data.share !== "boolean") fail("invalid-argument", "share must be a boolean.");
-  const roomRef = db.collection("randomRooms").doc(roomId);
-  const memberRef = roomRef.collection("members").doc(uid);
-  await consumeRateLimit(uid, "shareRandomUsername", 10, DAY_MS);
-  await db.runTransaction(async (tx) => {
-    const [room, member] = await Promise.all([tx.get(roomRef), tx.get(memberRef)]);
-    if (!room.exists || !member.exists) fail("not-found", "Random chat not found.");
-    if (room.data().status !== "closed" && room.data().expiresAt.toMillis() > Date.now()) {
-      fail("failed-precondition", "Username sharing is available after the chat ends.");
-    }
-    tx.update(memberRef, {
-      usernameSharing: data.share,
-      usernameSharingUpdatedAt: FieldValue.serverTimestamp(),
-    });
-  });
-  return { share: data.share };
-});
-
-exports.getRandomChatStatus = onCall({ region: REGION }, async (request) => {
-  const uid = requireAuth(request);
-  const data = inputObject(request.data);
-  onlyKeys(data, ["roomId"]);
-  const roomId = documentId(data, "roomId");
-  const roomRef = db.collection("randomRooms").doc(roomId);
-  await consumeRateLimit(uid, "getRandomChatStatus", 120, 60 * 1000);
-  const result = await db.runTransaction(async (tx) => {
-    const [room, ownMember, members] = await Promise.all([
-      tx.get(roomRef),
-      tx.get(roomRef.collection("members").doc(uid)),
-      tx.get(roomRef.collection("members").limit(2)),
-    ]);
-    if (!room.exists || !ownMember.exists) fail("not-found", "Random chat not found.");
-    const roomData = room.data();
-    const closed = roomData.status === "closed" || roomData.expiresAt.toMillis() <= Date.now();
-    const peer = members.docs.find((member) => member.id !== uid);
-    const response = {
-      status: closed ? "closed" : roomData.status,
-      expiresAt: roomData.expiresAt.toDate().toISOString(),
-    };
-    const blocked = peer && (await getPairStatus(tx, uid, peer.id)).blocked;
-    if (closed && peer && !blocked && peer.data().usernameSharing === true) {
-      const profile = await tx.get(db.collection("publicProfiles").doc(peer.id));
-      if (profile.exists && typeof profile.data().username === "string") {
-        response.peerUsername = profile.data().username;
-      }
-    }
-    return response;
-  });
-  return result;
-});
-
-exports.leaveRandomChat = onCall({ region: REGION }, async (request) => {
-  const uid = requireAuth(request);
-  const data = inputObject(request.data);
-  onlyKeys(data, ["roomId"]);
-  const roomId = documentId(data, "roomId");
-  const roomRef = db.collection("randomRooms").doc(roomId);
-  await consumeRateLimit(uid, "leaveRandomChat", 30, 60 * 1000);
-  await db.runTransaction(async (tx) => {
-    const memberRef = roomRef.collection("members").doc(uid);
-    const [room, member, members] = await Promise.all([
-      tx.get(roomRef), tx.get(memberRef), tx.get(roomRef.collection("members").limit(2)),
-    ]);
-    const participantUids = members.docs.map((item) => item.id);
-    const queues = await Promise.all(participantUids.map((participantUid) =>
-      tx.get(db.collection("randomMatchQueue").doc(participantUid))));
-    for (let index = 0; index < queues.length; index += 1) {
-      if (queues[index].exists && queues[index].data().roomId === roomId) {
-        tx.delete(queues[index].ref);
-      }
-    }
-    if (room.exists && member.exists) {
-      tx.update(roomRef, { status: "closed", closedAt: FieldValue.serverTimestamp() });
-    }
-  });
-  return { left: true };
-});
-
 exports.submitUserReport = onCall({ region: REGION }, async (request) => {
   const uid = requireAuth(request);
   const data = inputObject(request.data);
@@ -799,9 +494,6 @@ exports.submitUserReport = onCall({ region: REGION }, async (request) => {
       reportCount,
       updatedAt: FieldValue.serverTimestamp(),
     };
-    if (reportCount >= 5) {
-      updates.randomChatSuspendedUntil = Timestamp.fromMillis(Date.now() + 30 * DAY_MS);
-    }
     if (reportCount > 10) {
       updates.banned = true;
       updates.bannedAt = FieldValue.serverTimestamp();
@@ -819,74 +511,6 @@ exports.submitUserReport = onCall({ region: REGION }, async (request) => {
   return { reportId };
 });
 
-exports.submitRandomChatReport = onCall({ region: REGION }, async (request) => {
-  const uid = requireAuth(request);
-  const data = inputObject(request.data);
-  onlyKeys(data, ["roomId", "category", "description"]);
-  const roomId = documentId(data, "roomId");
-  const category = stringField(data, "category", 2, 40);
-  if (!["harassment", "spam", "threats", "impersonation", "other"].includes(category)) {
-    fail("invalid-argument", "Unsupported report category.");
-  }
-  const description = stringField(data, "description", 10, 4000);
-  const roomRef = db.collection("randomRooms").doc(roomId);
-  const membersRef = roomRef.collection("members");
-  await consumeRateLimit(uid, "submitRandomChatReport", 5, DAY_MS);
-
-  const reportResult = await db.runTransaction(async (tx) => {
-    await assertNotBanned(tx, uid);
-    const [room, reporterMember, members] = await Promise.all([
-      tx.get(roomRef),
-      tx.get(membersRef.doc(uid)),
-      tx.get(membersRef.limit(3)),
-    ]);
-    if (!room.exists || !reporterMember.exists) {
-      fail("not-found", "Random chat not found.");
-    }
-    const peerMember = members.docs.find((member) => member.id !== uid);
-    if (!peerMember || members.size !== 2) {
-      fail("failed-precondition", "This random chat has no reportable peer.");
-    }
-    const targetUid = requireUid(peerMember.id);
-    if (targetUid === uid) fail("failed-precondition", "This random chat is invalid.");
-
-    const dayBucket = Math.floor(Date.now() / REPORT_WINDOW_MS);
-    const reportId = crypto.createHash("sha256")
-      .update(JSON.stringify([uid, targetUid, dayBucket])).digest("hex");
-    const reportRef = db.collection("userReports").doc(reportId);
-    const counterRef = db.collection("moderationCounters").doc(targetUid);
-    const [existing, target] = await Promise.all([tx.get(reportRef), tx.get(counterRef)]);
-    if (existing.exists) fail("already-exists", "You have already reported this user today.");
-
-    const reportCount = (target.exists ? target.data().reportCount : 0) + 1;
-    const updates = {
-      reportCount,
-      updatedAt: FieldValue.serverTimestamp(),
-    };
-    if (reportCount >= 5) {
-      updates.randomChatSuspendedUntil = Timestamp.fromMillis(Date.now() + 30 * DAY_MS);
-    }
-    if (reportCount > 10) {
-      updates.banned = true;
-      updates.bannedAt = FieldValue.serverTimestamp();
-    }
-    tx.set(counterRef, updates, { merge: true });
-    tx.create(reportRef, {
-      reporterUid: uid,
-      targetUid,
-      source: "randomChat",
-      roomId,
-      category,
-      description,
-      status: "submitted",
-      createdAt: FieldValue.serverTimestamp(),
-    });
-    return reportId;
-  });
-
-  return { reportId: reportResult };
-});
-
 exports.submitModerationAppeal = onCall({ region: REGION }, async (request) => {
   const uid = requireAuth(request);
   const data = inputObject(request.data);
@@ -897,9 +521,7 @@ exports.submitModerationAppeal = onCall({ region: REGION }, async (request) => {
   await consumeRateLimit(uid, "moderationAppeal", 3, DAY_MS);
   await db.runTransaction(async (tx) => {
     const counter = await tx.get(db.collection("moderationCounters").doc(uid));
-    const activeSuspension = counter.exists && counter.data().randomChatSuspendedUntil &&
-      counter.data().randomChatSuspendedUntil.toMillis() > Date.now();
-    if (!counter.exists || (!counter.data().banned && !activeSuspension)) {
+    if (!counter.exists || !counter.data().banned) {
       fail("failed-precondition", "There is no active moderation action to appeal.");
     }
     tx.create(appealRef, {
@@ -948,18 +570,12 @@ exports.reviewModerationAppeal = onCall({ region: REGION }, async (request) => {
 
     if (data.decision === "reinstate" && counter.exists) {
       const moderation = counter.data();
-      const updates = {};
       if (moderation.banned === true) {
-        updates.banned = FieldValue.delete();
-        updates.bannedAt = FieldValue.delete();
-      }
-      if (moderation.randomChatSuspendedUntil &&
-          moderation.randomChatSuspendedUntil.toMillis() > Date.now()) {
-        updates.randomChatSuspendedUntil = FieldValue.delete();
-      }
-      if (Object.keys(updates).length) {
-        updates.updatedAt = FieldValue.serverTimestamp();
-        tx.update(counterRef, updates);
+        tx.update(counterRef, {
+          banned: FieldValue.delete(),
+          bannedAt: FieldValue.delete(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
       }
     }
   });
@@ -987,7 +603,6 @@ exports.deactivateAccount = onCall({ region: REGION }, async (request) => {
         updatedAt: FieldValue.serverTimestamp(),
       });
     }
-    tx.delete(db.collection("randomMatchQueue").doc(uid));
   });
   return { deactivated: true };
 });
@@ -1022,7 +637,7 @@ exports.deleteAccount = onCall({ region: REGION, timeoutSeconds: 540 }, async (r
   }
 
   const userRef = db.collection("users").doc(uid);
-  const [userSnapshot, publicProfileSnapshot, connections, requests, blocks, chats, authoredNotes, featuredNotes, receivedFeatures, memberships, reactions, votes] =
+  const [userSnapshot, publicProfileSnapshot, connections, requests, blocks, chats, authoredNotes, featuredNotes, receivedFeatures, reactions, votes] =
     await Promise.all([
       userRef.get(),
       db.collection("publicProfiles").doc(uid).get(),
@@ -1036,7 +651,6 @@ exports.deleteAccount = onCall({ region: REGION, timeoutSeconds: 540 }, async (r
       db.collection("publicNotes").where("authorUid", "==", uid).get(),
       db.collection("featuredNotes").where("featuredByUserId", "==", uid).get(),
       db.collection("featuredNotes").where("originalAuthorId", "==", uid).get(),
-      db.collectionGroup("members").where("uid", "==", uid).get(),
       db.collectionGroup("reactions").where("authorUid", "==", uid).get(),
       db.collectionGroup("votes").where("authorUid", "==", uid).get(),
     ]);
@@ -1053,11 +667,6 @@ exports.deleteAccount = onCall({ region: REGION, timeoutSeconds: 540 }, async (r
   await Promise.all(requests.flatMap((snapshot) => snapshot.docs.map((item) => item.ref.delete())));
   await Promise.all(chats.docs.map((chat) => db.recursiveDelete(chat.ref)));
   await Promise.all([...reactions.docs, ...votes.docs].map((interaction) => interaction.ref.delete()));
-  const randomRoomRefs = new Map(memberships.docs.map((member) => {
-    const roomRef = member.ref.parent.parent;
-    return [roomRef.path, roomRef];
-  }));
-  await Promise.all([...randomRoomRefs.values()].map((roomRef) => db.recursiveDelete(roomRef)));
   await Promise.all(authoredNotes.docs.map((note) => db.recursiveDelete(note.ref)));
   await Promise.all([...featuredNotes.docs, ...receivedFeatures.docs].map((note) => note.ref.delete()));
 
@@ -1073,7 +682,6 @@ exports.deleteAccount = onCall({ region: REGION, timeoutSeconds: 540 }, async (r
   await Promise.all([
     db.collection("publicProfiles").doc(uid).delete(),
     db.collection("accountStatuses").doc(uid).delete(),
-    db.collection("randomMatchQueue").doc(uid).delete(),
   ]);
   await getAuth().deleteUser(uid);
   return { deleted: true };

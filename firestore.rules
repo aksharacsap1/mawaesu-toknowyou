@@ -29,6 +29,15 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/connections/$(b)/users/$(a)).data.status == 'accepted';
     }
 
+    function acceptedConnectionRequest(requestId, uid, otherUid) {
+      let connectionRequest = getAfter(/databases/$(database)/documents/connectionRequests/$(requestId));
+      return connectionRequest.data.status == 'accepted'
+        && (
+          (connectionRequest.data.senderUid == otherUid && connectionRequest.data.recipientUid == uid)
+          || (connectionRequest.data.senderUid == uid && connectionRequest.data.recipientUid == otherUid)
+        );
+    }
+
     function blocked(a, b) {
       return exists(/databases/$(database)/documents/blocks/$(a)/users/$(b))
         || exists(/databases/$(database)/documents/blocks/$(b)/users/$(a));
@@ -238,12 +247,7 @@ service cloud.firestore {
         && request.resource.data.status == 'accepted'
         && request.resource.data.connectedAt == request.time
         && request.resource.data.requestId is string
-        && getAfter(/databases/$(database)/documents/connectionRequests/$(request.resource.data.requestId)).data.status
-          == 'accepted'
-        && getAfter(/databases/$(database)/documents/connectionRequests/$(request.resource.data.requestId)).data.senderUid
-          == otherUid
-        && getAfter(/databases/$(database)/documents/connectionRequests/$(request.resource.data.requestId)).data.recipientUid
-          == uid
+        && acceptedConnectionRequest(request.resource.data.requestId, uid, otherUid)
         && !blocked(uid, otherUid);
       allow update, delete: if false;
     }
@@ -347,31 +351,6 @@ service cloud.firestore {
           && request.resource.data.clientMessageId.size() <= 128
           && request.resource.data.createdAt == request.time;
         allow update, delete: if false;
-      }
-    }
-
-    match /randomRooms/{roomId} {
-      allow read: if signedIn()
-        && activeAccount(request.auth.uid)
-        && exists(/databases/$(database)/documents/randomRooms/$(roomId)/members/$(request.auth.uid))
-        && (
-          (resource.data.status in ['waiting', 'active']
-            && resource.data.expiresAt > request.time)
-          || (resource.data.status == 'closed'
-            && resource.data.cleanupAt > request.time)
-        );
-      allow write: if false;
-
-      match /members/{uid} {
-        allow read, write: if false;
-      }
-      match /messages/{messageId} {
-        allow read: if signedIn()
-          && activeAccount(request.auth.uid)
-          && exists(/databases/$(database)/documents/randomRooms/$(roomId)/members/$(request.auth.uid))
-          && get(/databases/$(database)/documents/randomRooms/$(roomId)).data.status == 'active'
-          && get(/databases/$(database)/documents/randomRooms/$(roomId)).data.expiresAt > request.time;
-        allow write: if false;
       }
     }
 

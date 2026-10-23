@@ -101,20 +101,22 @@ test("navigation targets exist and community tabs dispatch section loads", () =>
   assert.match(html, /const navigationPage = pageId === "roomIntroPage" \|\| pageId === "roomAnalysisPage" \? "profilePage" : pageId/);
 });
 
-test("Spark deployment removes callable dependencies and disables unsafe anonymous matching", () => {
+test("accepted connections support direct chats without anonymous matching", () => {
   assert.doesNotMatch(social, /httpsCallable|getFunctions|firebase-functions\.js|callables\./);
   assert.doesNotMatch(firebaseConfig, /"functions"\s*:/);
   assert.match(social, /transaction\.set\(profileRef/);
   assert.match(social, /await addDoc\(collection\(db, "directChats", activeChat, "messages"\)/);
   assert.match(social, /async function sendConnectionRequest/);
   assert.match(social, /async function directChatId\(currentUid, peerUid\)/);
-  assert.match(social, /Anonymous matching is paused on Firebase Spark/);
-  assert.match(html, /id="startRandomChatBtn"[^>]*disabled/);
+  assert.doesNotMatch(html + social + rules + functions, /Unknown chat|randomChat|randomRooms|randomMatchQueue|Anonymous matching/);
   assert.match(html, /Safety reports and appeals are reviewed manually/);
   assert.match(rules, /match \/userReports\/\{reportId\}/);
   assert.match(rules, /match \/moderationAppeals\/\{appealId\}/);
   assert.match(rules, /match \/connections\/\{uid\}\/users\/\{otherUid\}/);
   assert.match(rules, /getAfter\(\/databases\/\$\(database\)\/documents\/connectionRequests/);
+  assert.match(rules, /function acceptedConnectionRequest\(requestId, uid, otherUid\)[\s\S]*?senderUid == otherUid[\s\S]*?recipientUid == uid[\s\S]*?senderUid == uid[\s\S]*?recipientUid == otherUid/);
+  assert.match(rules, /acceptedConnectionRequest\(request\.resource\.data\.requestId, uid, otherUid\)/);
+  assert.doesNotMatch(rules, /match \/randomRooms/);
 });
 
 test("account-status read failures do not block notes or expose Firebase internals", () => {

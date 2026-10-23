@@ -244,7 +244,6 @@
     .reportDialog{width:min(92vw,560px);max-height:90vh;overflow:auto;background:#17121f;color:var(--text);
       border:1px solid var(--border);border-radius:20px;padding:22px}
     .reportDialog::backdrop{background:rgba(0,0,0,.72)}
-    .timerDisplay{font-size:1.8rem;font-weight:800;color:var(--gold)}
     .communityNav{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin:0 auto 18px}
     .roomPlanResults{display:grid;gap:12px;margin-top:16px}
     .taskDay{padding:14px;border-radius:14px;background:rgba(255,255,255,.08);border:1px solid var(--border)}
@@ -379,7 +378,6 @@
     .chatMessages{background:#111814;border-color:rgba(221,229,216,.11);border-radius:16px;padding:14px}
     .chatBubble{background:#25312a;border:1px solid rgba(221,229,216,.06);border-radius:16px 16px 16px 5px;color:#e6ebe3}
     .chatBubble.mine{background:#3c4434;border-color:rgba(216,189,136,.13);border-radius:16px 16px 5px 16px}
-    .timerDisplay{color:#e0c998}
     .taskDay,.affirmationCard{background:#1c2520;border:1px solid var(--line);border-radius:16px}
     .affirmationCard{background:linear-gradient(140deg,rgba(216,189,136,.11),rgba(79,99,80,.11))}
     .roomScore{color:#e0c998}
@@ -474,7 +472,7 @@
     .appNav .btn[aria-current="page"]{background:rgba(93,128,84,.12);color:#456641}
     .socialItem{background:#fffefb;border-color:rgba(56,82,61,.14)}
     .socialItem p{color:#526357}
-    .socialStatus,.timerDisplay,.roomScore{color:#55764d}
+    .socialStatus,.roomScore{color:#55764d}
     .chatMessages{background:#f1f2e9;border-color:rgba(56,82,61,.16)}
     .chatBubble{background:#fffefb;border-color:rgba(56,82,61,.12);color:#2c3c30}
     .chatBubble.mine{background:#dce9d4;border-color:rgba(91,126,81,.18)}
@@ -910,30 +908,6 @@
       <div class="page-inner">
         <h1 class="pageHeading">Chats</h1>
         <div id="chatsOverview">
-          <section id="randomSection" class="socialCard">
-            <h2>Unknown chat</h2>
-            <p class="muted">Anonymous matching is paused on Firebase Spark. A trusted backend is needed to protect participant identity and enforce the five-minute limit.</p>
-            <div id="randomEligibility" class="socialStatus" role="status" aria-live="polite"></div>
-            <button id="startRandomChatBtn" class="btn btn-purple" disabled>Unavailable on Firebase Spark</button>
-            <div id="randomChatPanel" hidden>
-              <div class="timerDisplay" id="randomChatTimer" aria-live="polite">05:00</div>
-              <div id="randomChatMessages" class="chatMessages" aria-live="polite"></div>
-              <div class="socialRow">
-                <input id="randomMessageInput" type="text" maxlength="2000" placeholder="Say hello…" aria-label="Anonymous chat message" />
-                <button id="sendRandomMessageBtn" class="btn btn-primary">Send</button>
-              </div>
-              <div class="socialRow" style="margin-top:12px">
-                <button id="leaveRandomChatBtn" class="btn btn-secondary">Leave chat</button>
-                <button id="reportRandomPeerBtn" class="btn btn-danger">Report</button>
-              </div>
-              <div id="randomChatEndPanel" hidden>
-                <p class="muted">The anonymous chat has ended. Share your username with this person?</p>
-                <button id="shareRandomUsernameBtn" class="btn btn-primary">Share my username</button>
-                <button id="keepRandomAnonymousBtn" class="btn btn-secondary">Keep it anonymous</button>
-                <p id="randomShareStatus" class="socialStatus" role="status"></p>
-              </div>
-            </div>
-          </section>
           <section id="connectionsSection" class="socialCard">
             <h2>Friends</h2>
             <p class="muted">Open a friend to continue in a private encrypted conversation.</p>
