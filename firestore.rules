@@ -1,0 +1,377 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function ownsUser(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function safeProfileChanges() {
+      return !('admin' in request.resource.data)
+          && !('role' in request.resource.data)
+          && !('claims' in request.resource.data);
+    }
+
+    function usernamePath(username) {
+      return /databases/$(database)/documents/usernames/$(username);
+    }
+
+    function usernameBelongsTo(username, userId) {
+      return exists(usernamePath(username))
+          && get(usernamePath(username)).data.uid == userId;
+    }
+
+    function profileMatches(profile, userId) {
+      return profile.keys().hasOnly(['uid', 'handle', 'displayName', 'bio'])
+          && profile.uid == userId
+          && usernameBelongsTo(profile.handle, userId)
+          && get(usernamePath(profile.handle)).data.displayName == profile.displayName
+          && get(usernamePath(profile.handle)).data.bio == profile.bio;
+    }
+
+    function validAffirmation(affirmationId) {
+      return affirmationId in [
+        'affirmation-1', 'affirmation-2', 'affirmation-3', 'affirmation-4',
+        'affirmation-5', 'affirmation-6', 'affirmation-7', 'affirmation-8'
+      ];
+    }
+
+    function publicNotePath(noteId) {
+      return /databases/$(database)/documents/publicNotes/$(noteId);
+    }
+
+    function ownsCommunityNote(noteId) {
+      let note = get(publicNotePath(noteId)).data;
+      return ('authorId' in note && note.authorId == request.auth.uid)
+          || ('authorUid' in note && note.authorUid == request.auth.uid);
+    }
+
+    function communityChildPath(noteId, childCollection, childId) {
+      return /databases/$(database)/documents/publicNotes/$(noteId)/$(childCollection)/$(childId);
+    }
+
+    function privateMarkerPath(userId, markerCollection, noteId) {
+      return /databases/$(database)/documents/users/$(userId)/$(markerCollection)/$(noteId);
+    }
+
+    function validCommunityIdentity(userId, username, displayName) {
+      return displayName is string
+          && displayName.size() > 0
+          && displayName.size() <= 80
+          && username is string
+          && username.size() <= 20
+          && (username == '' || (
+            username.matches('^[a-z0-9._-]{3,20}$')
+            && usernameBelongsTo(username, userId)
+            && get(usernamePath(username)).data.displayName == displayName
+          ));
+    }
+
+    function validPollChoice(noteId, optionIndex) {
+      let note = get(publicNotePath(noteId)).data;
+      return note.kind == 'poll'
+          && optionIndex is int
+          && optionIndex >= 0
+          && optionIndex < note.poll.options.size();
+    }
+
+    function validPublicNote(data) {
+      return data.keys().hasOnly([
+            'authorId', 'displayName', 'username', 'title', 'body', 'kind', 'poll', 'createdAt'
+          ])
+          && data.authorId == request.auth.uid
+          && validCommunityIdentity(data.authorId, data.username, data.displayName)
+          && data.title is string
+          && data.title.size() <= 120
+          && data.body is string
+          && data.body.size() <= 1000
+          && data.createdAt == request.time
+          && (
+            (data.kind == 'note' && (data.title.size() > 0 || data.body.size() > 0) && !('poll' in data))
+            || (data.kind == 'poll'
+              && 'poll' in data
+              && data.poll is map
+              && data.poll.keys().hasOnly(['question', 'options'])
+              && data.poll.question is string
+              && data.poll.question.size() > 0
+              && data.poll.question.size() <= 180
+              && data.poll.options is list
+              && data.poll.options.size() >= 2
+              && data.poll.options.size() <= 4
+              && data.poll.options[0] is string
+              && data.poll.options[0].size() > 0
+              && data.poll.options[0].size() <= 100
+              && data.poll.options[1] is string
+              && data.poll.options[1].size() > 0
+              && data.poll.options[1].size() <= 100
+              && (data.poll.options.size() < 3 || (
+                data.poll.options[2] is string
+                && data.poll.options[2].size() > 0
+                && data.poll.options[2].size() <= 100
+              ))
+              && (data.poll.options.size() < 4 || (
+                data.poll.options[3] is string
+                && data.poll.options[3].size() > 0
+                && data.poll.options[3].size() <= 100
+              ))
+            )
+          );
+    }
+
+    function validPublicProfile(userId) {
+      let data = request.resource.data;
+      return data.keys().hasOnly(['uid', 'handle', 'displayName', 'bio', 'updatedAt'])
+          && data.uid == userId
+          && data.handle is string
+          && data.displayName is string
+          && data.displayName.size() > 0
+          && data.displayName.size() <= 80
+          && data.bio is string
+          && data.bio.size() <= 120
+          && data.updatedAt == request.time
+          && (data.handle == '' || (
+            data.handle.matches('^[a-z0-9._-]{3,20}$')
+            && existsAfter(usernamePath(data.handle))
+            && getAfter(usernamePath(data.handle)).data.uid == userId
+            && getAfter(usernamePath(data.handle)).data.displayName == data.displayName
+            && getAfter(usernamePath(data.handle)).data.bio == data.bio
+          ));
+    }
+
+    match /users/{userId} {
+      allow read, delete: if ownsUser(userId);
+      allow create, update: if ownsUser(userId) && safeProfileChanges();
+
+      match /likedNotes/{noteId} {
+        allow read: if ownsUser(userId);
+        allow create: if ownsUser(userId)
+            && !exists(privateMarkerPath(userId, 'likedNotes', noteId))
+            && request.resource.data.keys().hasOnly(['likeId', 'createdAt'])
+            && request.resource.data.likeId is string
+            && request.resource.data.createdAt == request.time
+            && existsAfter(communityChildPath(noteId, 'likes', request.resource.data.likeId))
+            && getAfter(communityChildPath(noteId, 'likes', request.resource.data.likeId)).data.createdAt == request.time;
+        allow update: if false;
+        allow delete: if ownsUser(userId)
+            && exists(privateMarkerPath(userId, 'likedNotes', noteId))
+            && !existsAfter(communityChildPath(noteId, 'likes', resource.data.likeId));
+      }
+
+      match /pollVotes/{noteId} {
+        allow read: if ownsUser(userId);
+        allow create: if ownsUser(userId)
+            && !exists(privateMarkerPath(userId, 'pollVotes', noteId))
+            && request.resource.data.keys().hasOnly(['voteId', 'optionIndex', 'createdAt'])
+            && request.resource.data.voteId is string
+            && request.resource.data.createdAt == request.time
+            && validPollChoice(noteId, request.resource.data.optionIndex)
+            && existsAfter(communityChildPath(noteId, 'votes', request.resource.data.voteId))
+            && getAfter(communityChildPath(noteId, 'votes', request.resource.data.voteId)).data.optionIndex == request.resource.data.optionIndex;
+        allow update: if ownsUser(userId)
+            && request.resource.data.voteId == resource.data.voteId
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['optionIndex', 'updatedAt'])
+            && request.resource.data.updatedAt == request.time
+            && validPollChoice(noteId, request.resource.data.optionIndex)
+            && getAfter(communityChildPath(noteId, 'votes', resource.data.voteId)).data.optionIndex == request.resource.data.optionIndex;
+        allow delete: if ownsUser(userId)
+            && exists(privateMarkerPath(userId, 'pollVotes', noteId))
+            && !existsAfter(communityChildPath(noteId, 'votes', resource.data.voteId));
+      }
+
+      match /{collection}/{document=**} {
+        allow read: if ownsUser(userId);
+        allow create, update, delete: if ownsUser(userId)
+            && !(collection in ['likedNotes', 'pollVotes']);
+      }
+    }
+
+    match /usernames/{username} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.username == username
+          && username.matches('^[a-z0-9._-]{3,20}$')
+          && request.resource.data.keys().hasOnly(['uid', 'username', 'displayName', 'bio', 'updatedAt']);
+      allow update: if signedIn()
+          && resource.data.uid == request.auth.uid
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.username == username
+          && request.resource.data.keys().hasOnly(['uid', 'username', 'displayName', 'bio', 'updatedAt']);
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    match /connectionRequests/{requestId} {
+      allow read: if signedIn() && request.auth.uid in resource.data.participantIds;
+      allow create: if signedIn()
+          && requestId == request.resource.data.senderId + '_' + request.resource.data.recipientId
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.recipientId != request.auth.uid
+          && request.resource.data.participantIds.size() == 2
+          && request.resource.data.participantIds.hasAll([
+            request.resource.data.senderId, request.resource.data.recipientId
+          ])
+          && !exists(/databases/$(database)/documents/connections/$(request.resource.data.senderId + '_' + request.resource.data.recipientId))
+          && !exists(/databases/$(database)/documents/connections/$(request.resource.data.recipientId + '_' + request.resource.data.senderId))
+          && request.resource.data.state == 'pending'
+          && request.resource.data.keys().hasOnly([
+            'senderId', 'recipientId', 'participantIds', 'senderProfile',
+            'recipientProfile', 'state', 'createdAt'
+          ])
+          && profileMatches(request.resource.data.senderProfile, request.auth.uid)
+          && profileMatches(request.resource.data.recipientProfile, request.resource.data.recipientId);
+      allow update: if signedIn()
+          && resource.data.recipientId == request.auth.uid
+          && resource.data.state == 'pending'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state', 'updatedAt'])
+          && request.resource.data.state in ['accepted', 'declined'];
+      allow delete: if signedIn() && request.auth.uid in resource.data.participantIds;
+    }
+
+    match /connections/{connectionId} {
+      allow read: if signedIn() && request.auth.uid in resource.data.memberIds;
+      allow create: if signedIn()
+          && connectionId == request.resource.data.requestId
+          && request.auth.uid in request.resource.data.memberIds
+          && request.resource.data.memberIds.size() == 2
+          && existsAfter(/databases/$(database)/documents/connectionRequests/$(request.resource.data.requestId))
+          && getAfter(/databases/$(database)/documents/connectionRequests/$(request.resource.data.requestId)).data.state == 'accepted'
+          && getAfter(/databases/$(database)/documents/connectionRequests/$(request.resource.data.requestId)).data.participantIds == request.resource.data.memberIds
+          && getAfter(/databases/$(database)/documents/connectionRequests/$(request.resource.data.requestId)).data.senderProfile == request.resource.data.memberProfiles[0]
+          && getAfter(/databases/$(database)/documents/connectionRequests/$(request.resource.data.requestId)).data.recipientProfile == request.resource.data.memberProfiles[1]
+          && request.resource.data.keys().hasOnly(['requestId', 'memberIds', 'memberProfiles', 'createdAt']);
+      allow update: if false;
+      allow delete: if signedIn() && request.auth.uid in resource.data.memberIds;
+    }
+
+    match /affirmationShares/{shareId} {
+      allow read: if signedIn() && request.auth.uid in resource.data.participantIds;
+      allow create: if signedIn()
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.recipientId != request.auth.uid
+          && request.resource.data.participantIds.size() == 2
+          && request.resource.data.participantIds.hasAll([
+            request.resource.data.senderId, request.resource.data.recipientId
+          ])
+          && validAffirmation(request.resource.data.affirmationId)
+          && request.resource.data.keys().hasOnly([
+            'senderId', 'recipientId', 'participantIds', 'connectionId',
+            'affirmationId', 'sentOn', 'createdAt'
+          ])
+          && exists(/databases/$(database)/documents/connections/$(request.resource.data.connectionId))
+          && get(/databases/$(database)/documents/connections/$(request.resource.data.connectionId)).data.memberIds.hasAll([
+            request.auth.uid, request.resource.data.recipientId
+          ]);
+      allow update: if false;
+      allow delete: if signedIn() && request.auth.uid in resource.data.participantIds;
+    }
+
+    match /publicAffirmations/{userId} {
+      allow read: if signedIn();
+      allow create, update: if ownsUser(userId)
+          && request.resource.data.authorId == request.auth.uid
+          && validAffirmation(request.resource.data.affirmationId)
+          && usernameBelongsTo(request.resource.data.username, request.auth.uid)
+          && get(usernamePath(request.resource.data.username)).data.displayName == request.resource.data.displayName
+          && request.resource.data.keys().hasOnly([
+            'authorId', 'username', 'displayName', 'affirmationId', 'updatedAt'
+          ]);
+      allow delete: if ownsUser(userId);
+    }
+
+    match /publicProfiles/{userId} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create, update: if ownsUser(userId) && validPublicProfile(userId);
+      allow delete: if ownsUser(userId);
+    }
+
+    match /publicNotes/{noteId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && validPublicNote(request.resource.data);
+      allow update: if false;
+      allow delete: if signedIn()
+          && (('authorId' in resource.data && resource.data.authorId == request.auth.uid)
+            || ('authorUid' in resource.data && resource.data.authorUid == request.auth.uid));
+
+      match /likes/{likeId} {
+        allow read: if signedIn();
+        allow create: if signedIn()
+            && request.resource.data.keys().hasOnly(['createdAt'])
+            && request.resource.data.createdAt == request.time
+            && existsAfter(privateMarkerPath(request.auth.uid, 'likedNotes', noteId))
+            && getAfter(privateMarkerPath(request.auth.uid, 'likedNotes', noteId)).data.likeId == likeId;
+        allow update: if false;
+        allow delete: if signedIn()
+            && (
+              ownsCommunityNote(noteId)
+              || (
+                exists(privateMarkerPath(request.auth.uid, 'likedNotes', noteId))
+                && get(privateMarkerPath(request.auth.uid, 'likedNotes', noteId)).data.likeId == likeId
+                && !existsAfter(privateMarkerPath(request.auth.uid, 'likedNotes', noteId))
+              )
+              || likeId == request.auth.uid
+            );
+      }
+
+      match /votes/{voteId} {
+        allow read: if signedIn();
+        allow create: if signedIn()
+            && request.resource.data.keys().hasOnly(['optionIndex', 'createdAt'])
+            && request.resource.data.createdAt == request.time
+            && validPollChoice(noteId, request.resource.data.optionIndex)
+            && existsAfter(privateMarkerPath(request.auth.uid, 'pollVotes', noteId))
+            && getAfter(privateMarkerPath(request.auth.uid, 'pollVotes', noteId)).data.voteId == voteId
+            && getAfter(privateMarkerPath(request.auth.uid, 'pollVotes', noteId)).data.optionIndex == request.resource.data.optionIndex;
+        allow update: if signedIn()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['optionIndex', 'updatedAt'])
+            && request.resource.data.updatedAt == request.time
+            && validPollChoice(noteId, request.resource.data.optionIndex)
+            && exists(privateMarkerPath(request.auth.uid, 'pollVotes', noteId))
+            && get(privateMarkerPath(request.auth.uid, 'pollVotes', noteId)).data.voteId == voteId
+            && getAfter(privateMarkerPath(request.auth.uid, 'pollVotes', noteId)).data.optionIndex == request.resource.data.optionIndex;
+        allow delete: if signedIn()
+            && (
+              ownsCommunityNote(noteId)
+              || (
+                exists(privateMarkerPath(request.auth.uid, 'pollVotes', noteId))
+                && get(privateMarkerPath(request.auth.uid, 'pollVotes', noteId)).data.voteId == voteId
+                && !existsAfter(privateMarkerPath(request.auth.uid, 'pollVotes', noteId))
+              )
+            );
+      }
+
+      match /comments/{commentId} {
+        allow read: if signedIn();
+        allow create: if signedIn()
+            && request.resource.data.keys().hasOnly([
+              'authorId', 'displayName', 'username', 'text', 'createdAt'
+            ])
+            && request.resource.data.authorId == request.auth.uid
+            && validCommunityIdentity(
+              request.resource.data.authorId,
+              request.resource.data.username,
+              request.resource.data.displayName
+            )
+            && request.resource.data.text is string
+            && request.resource.data.text.size() > 0
+            && request.resource.data.text.size() <= 500
+            && request.resource.data.createdAt == request.time;
+        allow update: if false;
+        allow delete: if signedIn()
+            && (
+              ('authorId' in resource.data && resource.data.authorId == request.auth.uid)
+              || ('authorUid' in resource.data && resource.data.authorUid == request.auth.uid)
+              || ownsCommunityNote(noteId)
+            );
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

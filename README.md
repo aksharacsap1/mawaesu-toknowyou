@@ -8,6 +8,8 @@
 
 Mawaesu explores the intersection of Architectural Psychology and Digital Space, including how digital layouts, interfaces, and virtual environments can influence cognition, emotion, and behaviour. The project creates a digital experience for self-discovery and personal growth.
 
+The application includes a persistent Firebase sign-in, a first-login self-discovery assessment, and separate Home, Discover, Learn, Connections, Journal, Create, Spaces, My Growth, My Archive, and Profile destinations. The Profile page includes account details, avatar and bio editing, preferences, and the saved archetype, colour palette, and room analysis. Learning modules are source-linked and designed to distinguish educational interpretation from clinical or scientific certainty. The first 20 Psychology and Human Behaviour lessons have been written and referenced. The complete 1,000-topic curriculum is being developed in sourced category batches; only finished modules are currently presented as lessons.
+
 Key areas of exploration include:
 * Spatial cognition: How users navigate, map, and perceive boundaries within a digital environment.
 * Environmental affect: The emotional impact of digital layouts, scale, and visual hierarchy.
@@ -21,6 +23,14 @@ Charitha Sai Akshara Pokuri
 Mawaesu is hosted on Firebase at [mawaesu-toknowyou.web.app](https://mawaesu-toknowyou.web.app/). The GitHub Actions workflow deploys the static site in `public/` to Firebase Hosting after a push to `main`.
 
 The SEO generation script uses `SITE_URL` when set and otherwise defaults to the production URL. It generates `public/robots.txt` and `public/sitemap.xml`.
+
+The assessment, quiz, archetype result, colour analysis, and room analysis are rendered as routes within the main application. Requests for the former `/legacy.html` URL redirect to the in-app assessment. Firebase Auth uses browser-local persistence; a user's first authenticated visit opens the assessment until a result is saved. Firestore and Storage rules are maintained in `firestore.rules` and `storage.rules`; deploy them to Firebase when publishing rule changes.
+
+The Home page includes a public-notes feed where signed-in members can publish notes or polls, react, save notes to their private archive, and comment. Poll selections are stored without profile identifiers. These community posts are public to signed-in members and are separate from the private Journal.
+
+Connections use exact username lookup and explicit request acceptance. Public profiles expose only a username, display name, and optional short bio. Connection sharing is limited to the curated daily affirmation; there is no chat, private-message, or custom-message feature. A user may also publish that daily affirmation to the signed-in MAWAESU community. The corresponding Firestore rules must be deployed before notes, polls, or social features are available in production.
+
+Profile includes the account editor and avatar choices, My Notes / Featured / Saved writing tabs, assessment tools, archetype, colour and room summaries, a daily affirmation, and account controls. Saved community notes remain private to the signed-in user; Featured selections are also private. Full assessment and colour/room analyses open from the corresponding Profile links. Deactivation and deletion requests are recorded privately for administrator processing; they do not immediately deactivate or delete the account. Profile remains a full application destination, with navigation available on mobile and the MAWAESU home link on desktop.
 
 ## License
 
