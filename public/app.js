@@ -46,6 +46,8 @@ let communityNotes = [];
 let communityNotesCursor = null;
 let communityNotesHaveMore = true;
 const communityNotesPageSize = 12;
+let connectionSearchTimer = null;
+let connectionSearchRevision = 0;
 let profileOwnNotes = [];
 let profileSavedNotes = [];
 let profileWritingTab = "Saved";
@@ -964,8 +966,8 @@ function socialProfile(profile) {
   return { uid: profile.uid, handle: profile.handle, displayName: profile.displayName, bio: profile.bio || "" };
 }
 async function renderConnections() {
-  routeContent.innerHTML = `${pageHeading("A thoughtful social space","Connections","Find someone by their exact username, accept connections by choice, and share curated affirmations. MAWAESU has no private messaging.")}`
-    + `<section class="panel connection-search"><h2>Find a person</h2><p>Search by exact handle. Their email, journal, assessment, and private information are never shown.</p><form id="connectionSearchForm" class="toolbar"><input id="connectionHandleInput" type="text" maxlength="20" placeholder="Their username" aria-label="Username to find" autocomplete="off"><button class="primary-button" type="submit">Find</button></form><div id="connectionSearchResult" aria-live="polite"></div></section>`
+  routeContent.innerHTML = `${pageHeading("A thoughtful social space","Connections","Find people by matching usernames, accept connections by choice, and share curated affirmations. MAWAESU has no private messaging.")}`
+    + `<section class="panel connection-search"><h2>Find a person</h2><p>Type at least two characters to see public username matches and close spelling suggestions. Choose a result or search the exact handle. Their email, journal, assessment, and private information are never shown.</p><form id="connectionSearchForm" class="toolbar"><input id="connectionHandleInput" type="text" maxlength="20" placeholder="Type a username" aria-label="Username to find" autocomplete="off" aria-autocomplete="list" aria-expanded="false" aria-controls="connectionHandleSuggestions"><button class="primary-button" type="submit">Find</button></form><div id="connectionHandleSuggestions" class="connection-handle-suggestions" role="listbox" aria-label="Matching usernames" hidden></div><div id="connectionSearchResult" aria-live="polite"></div></section>`
     + `<section class="panel connection-search"><h2>Your public profile</h2><p>Only your display name and optional bio are shared when someone looks up your exact handle. You can edit these in Profile &amp; settings.</p><p id="myPublicHandle" class="field-note"></p></section>`
     + `<section class="social-grid"><article class="panel"><h2>Connection requests</h2><div id="connectionRequestsList"></div></article><article class="panel"><h2>Your connections</h2><div id="connectionsList"></div></article></section>`
     + `<section class="panel social-sharing"><p class="eyebrow">Affirmation sharing</p><h2>Share today's affirmation</h2><p>Only this curated daily affirmation can be sent to a connection. There is no custom-message field.</p><blockquote id="dailySocialAffirmation" class="inbox-affirmation"></blockquote><div id="affirmationInbox"></div></section>`
@@ -976,6 +978,7 @@ async function renderConnections() {
   const handle = state.profile.publicHandle || "";
   $("myPublicHandle").textContent = handle ? `Your handle: @${handle}` : "Set a username in Profile & settings before people can find you.";
   $("connectionSearchForm").addEventListener("submit", findConnectionProfile);
+  $("connectionHandleInput").addEventListener("input",handleConnectionSearchInput);
   $("publishAffirmationBtn").addEventListener("click", publishAffirmation);
   try {
     await refreshConnections();
@@ -986,6 +989,92 @@ async function renderConnections() {
     $("affirmationInbox").innerHTML = "";
     $("communityAffirmations").innerHTML = "";
   }
+}
+
+function handleConnectionSearchInput(event) {
+  const input=event.currentTarget;
+  const suggestions=$("connectionHandleSuggestions");
+  const term=input.value.trim().replace(/^@/,"").toLowerCase();
+  const revision=++connectionSearchRevision;
+  clearTimeout(connectionSearchTimer);
+  suggestions.replaceChildren();
+  suggestions.hidden=true;
+  input.setAttribute("aria-expanded","false");
+  if(term.length<2||!/^[a-z0-9._-]+$/.test(term))return;
+  connectionSearchTimer=setTimeout(()=>loadConnectionUsernameSuggestions(term,revision),220);
+}
+
+async function loadConnectionUsernameSuggestions(term,revision) {
+  const suggestions=$("connectionHandleSuggestions");
+  if(!suggestions)return;
+  try{
+    const prefixes=[...new Set([term,...term.slice(0,2)])];
+    const snapshots=await Promise.all(prefixes.map(prefix=>getDocs(query(
+      collection(db,"usernames"),
+      where("username",">=",prefix),
+      where("username","<=",prefix+"\uf8ff"),
+      orderBy("username"),
+      limit(25)
+    ))));
+    if(revision!==connectionSearchRevision||$("connectionHandleInput").value.trim().replace(/^@/,"").toLowerCase()!==term)return;
+    const candidates=new Map();
+    snapshots.forEach(snapshot=>snapshot.docs.forEach(item=>{
+      const profile=publicProfile(item);
+      if(profile.uid!==currentUser.uid)candidates.set(profile.handle,profile);
+    }));
+    const matches=[...candidates.values()]
+      .map(profile=>({profile,rank:usernameSuggestionRank(term,profile.handle)}))
+      .filter(item=>Number.isFinite(item.rank))
+      .sort((left,right)=>left.rank-right.rank||left.profile.handle.localeCompare(right.profile.handle))
+      .slice(0,8);
+    suggestions.innerHTML=matches.length
+      ?matches.map(({profile})=>`<button type="button" class="connection-handle-suggestion" role="option" data-connection-handle="${escapeHtml(profile.handle)}">@${escapeHtml(profile.handle)}</button>`).join("")
+      :`<p class="field-note">No close username matches. You can still search the exact handle.</p>`;
+    suggestions.hidden=false;
+    $("connectionHandleInput").setAttribute("aria-expanded","true");
+    suggestions.querySelectorAll("[data-connection-handle]").forEach(button=>button.addEventListener("click",()=>{
+      $("connectionHandleInput").value=button.dataset.connectionHandle;
+      suggestions.hidden=true;
+      $("connectionHandleInput").setAttribute("aria-expanded","false");
+      $("connectionSearchForm").requestSubmit();
+    }));
+  }catch(error){
+    if(revision!==connectionSearchRevision)return;
+    suggestions.innerHTML=`<p class="form-error">Could not load username suggestions: ${escapeHtml(error.message)}</p>`;
+    suggestions.hidden=false;
+    $("connectionHandleInput").setAttribute("aria-expanded","true");
+  }
+}
+
+function usernameSuggestionRank(term,handle) {
+  if(handle.startsWith(term))return 0;
+  if(handle.includes(term))return 1;
+  const maxDistance=term.length>=6?2:1;
+  let best=maxDistance+1;
+  for(let start=0;start<handle.length;start++){
+    for(const size of new Set([Math.max(1,term.length-1),term.length,term.length+1])){
+      const distance=editDistance(term,handle.slice(start,start+size));
+      if(distance<best)best=distance;
+      if(best===0)return 2;
+    }
+  }
+  return best<=maxDistance?2+best:Number.POSITIVE_INFINITY;
+}
+
+function editDistance(left,right) {
+  let previous=Array.from({length:right.length+1},(_,index)=>index);
+  for(let row=1;row<=left.length;row++){
+    const current=[row];
+    for(let column=1;column<=right.length;column++){
+      current[column]=Math.min(
+        current[column-1]+1,
+        previous[column]+1,
+        previous[column-1]+(left[row-1]===right[column-1]?0:1)
+      );
+    }
+    previous=current;
+  }
+  return previous[right.length];
 }
 
 async function refreshConnections() {

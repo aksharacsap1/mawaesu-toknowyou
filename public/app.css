@@ -335,6 +335,9 @@ body.dark[data-route="room-analysis"] .room-plan-saved{background:#1d2924}
 .connection-search{margin-bottom:16px}
 .connection-search .toolbar{margin:14px 0 0}
 .connection-search .toolbar input{max-width:380px}
+.connection-handle-suggestions:not([hidden]){display:grid;gap:4px;width:min(100%,520px);margin-top:8px;padding:6px;border:1px solid var(--line);border-radius:10px;background:var(--paper)}
+.connection-handle-suggestion{width:100%;padding:10px 12px;border:0;border-radius:7px;background:transparent;color:var(--charcoal);text-align:left;font:inherit;cursor:pointer}
+.connection-handle-suggestion:hover,.connection-handle-suggestion:focus-visible{background:var(--cream);outline:2px solid var(--forest);outline-offset:-2px}
 .public-profile,.social-item,.community-item{padding:16px;border:1px solid var(--line);background:var(--paper);margin:12px 0}
 .public-profile h3,.social-item h3{font-family:var(--serif);margin:5px 0}
 .public-profile p,.social-item p{color:var(--muted);line-height:1.5}
