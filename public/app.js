@@ -245,6 +245,16 @@ async function loadState() {
   state = { profile, entries, intentions, captured, goals, drafts, books, rooms, archive };
   applyProfilePreferences();
 }
+function usernameChangeTimestamps(profile) {
+  const cutoff=Date.now()-30*24*60*60*1000;
+  return [profile.usernameChangePreviousAt,profile.usernameChangeLastAt]
+    .map(value=>typeof value?.toMillis==="function"?value.toMillis():value instanceof Date?value.getTime():NaN)
+    .filter(value=>Number.isFinite(value)&&value>cutoff)
+    .sort((a,b)=>a-b);
+}
+function usernameChangesRemaining(profile) {
+  return Math.max(0,2-usernameChangeTimestamps(profile).length);
+}
 function applyProfilePreferences() {
   const legacyProfile = state.profile.profileState || {};
   state.profile.publicHandle ||= state.profile.username || legacyProfile.username || "";
@@ -263,10 +273,10 @@ function applyProfilePreferences() {
   const usernameInput = $("profileUsername");
   if(usernameInput){
     usernameInput.value=state.profile.publicHandle;
-    usernameInput.disabled=!!state.profile.publicHandle;
+    const remaining=usernameChangesRemaining(state.profile);
     $("profileUsernameNote").textContent=state.profile.publicHandle
-      ? `Your handle is @${state.profile.publicHandle} and cannot be changed.`
-      : "Choose a unique, permanent handle so people can find you. Only your display name and optional bio are shown.";
+      ? `You can change your username up to twice in any 30-day period. ${remaining} change${remaining===1?"":"s"} currently available.`
+      : "Choose a unique handle. After your first choice, you can change it up to twice in any 30-day period.";
   }
   const privateBio=$("profileBio");
   if(privateBio)privateBio.value=state.profile.bio||"";
@@ -1846,12 +1856,6 @@ async function selectProfileAvatar(symbol) {
   const profileState={...(state.profile.profileState||{}),avatar:null};
   state.profile={...state.profile,avatarUrl:"",avatarSymbol:symbol,profileState};
   renderProfileAvatar();
-  try{
-    await saveDocument("profile","main",{avatarUrl:null,avatarSymbol:symbol,profileState});
-    toast("Profile illustration updated");
-  }catch(error){
-    $("profileError").textContent="Could not save your profile illustration: "+error.message;
-  }
 }
 
 async function saveProfilePage(event) {
@@ -1860,39 +1864,84 @@ async function saveProfilePage(event) {
   const displayName=$("profileDisplayName").value.trim();
   const publicHandle=$("profileUsername").value.trim().toLowerCase();
   if(!displayName){$("profileError").textContent="Enter a display name.";return;}
-  if(!state.profile.publicHandle&&publicHandle&&!/^[a-z0-9._-]{3,20}$/.test(publicHandle)){
+  if(state.profile.publicHandle&&!publicHandle){
+    $("profileError").textContent="Your username cannot be blank.";
+    return;
+  }
+  if(publicHandle&&!/^[a-z0-9._-]{3,20}$/.test(publicHandle)){
     $("profileError").textContent="Choose a username of 3–20 letters, numbers, periods, underscores, or hyphens.";
     return;
   }
+  const previousHandle=state.profile.publicHandle||"";
+  const changingUsername=!!previousHandle&&publicHandle!==previousHandle;
+  let authoritativeProfile=state.profile;
+  if(changingUsername){
+    try{
+      const [usernameSnapshot,profileSnapshot]=await Promise.all([
+        getDoc(doc(db,"usernames",publicHandle)),
+        getDoc(doc(db,"users",currentUser.uid))
+      ]);
+      if(usernameSnapshot.exists()&&usernameSnapshot.data().uid!==currentUser.uid){
+        $("profileError").textContent="That username is already in use. Choose another one.";
+        return;
+      }
+      authoritativeProfile=profileSnapshot.exists()?profileSnapshot.data():{};
+      const savedHandle=authoritativeProfile.publicHandle||authoritativeProfile.username||authoritativeProfile.profileState?.username||"";
+      if(savedHandle!==previousHandle){
+        $("profileError").textContent="Your saved username changed in another session. Reload Profile before trying again.";
+        return;
+      }
+      if(usernameChangeTimestamps(authoritativeProfile).length>=2){
+        $("profileError").textContent="You have used both username changes available in the last 30 days. You can try again when your oldest recent change is more than 30 days old.";
+        return;
+      }
+    }catch(error){
+      $("profileError").textContent="Could not check username availability: "+error.message;
+      return;
+    }
+  }
   const profileState={
     bio:$("profileBio").value.trim(),
-    avatar:state.profile.avatarUrl||state.profile.profileState?.avatar||null,
-    username:state.profile.publicHandle||publicHandle||""
+    avatar:state.profile.avatarSymbol?null:(state.profile.avatarUrl||state.profile.profileState?.avatar||null),
+    username:publicHandle
   };
   const data={
     displayName,
-    publicHandle:state.profile.publicHandle||publicHandle||"",
-    username:state.profile.publicHandle||publicHandle||"",
+    publicHandle,
+    username:publicHandle,
     bio:profileState.bio,
     publicBio:$("profilePublicBio").value.trim(),
     profileState,
     avatarSymbol:state.profile.avatarSymbol||"",
+    avatarUrl:state.profile.avatarSymbol?null:(state.profile.avatarUrl||null),
     theme:$("profileTheme").value,
     largeText:$("profileLargeText").checked
   };
+  const localUsernameChangeAt=new Date();
+  if(changingUsername){
+    data.usernameChangeLastAt=serverTimestamp();
+    data.usernameChangePreviousAt=authoritativeProfile.usernameChangeLastAt||null;
+  }
   try{
     const batch=writeBatch(db);
     batch.set(doc(db,"users",currentUser.uid),{...data,updatedAt:serverTimestamp()},{merge:true});
     batch.set(doc(db,"publicProfiles",currentUser.uid),{
       uid:currentUser.uid,handle:data.publicHandle,displayName,bio:data.publicBio,updatedAt:serverTimestamp()
-    },{merge:true});
+    });
     if(data.publicHandle){
       batch.set(doc(db,"usernames",data.publicHandle),{
         uid:currentUser.uid,username:data.publicHandle,displayName,bio:data.publicBio,updatedAt:serverTimestamp()
-      },{merge:true});
+      });
     }
+    if(changingUsername)batch.delete(doc(db,"usernames",previousHandle));
     await batch.commit();
-    state.profile={...state.profile,...data};
+    state.profile={
+      ...state.profile,...data,
+      ...(changingUsername?{
+        usernameChangeLastAt:localUsernameChangeAt,
+        usernameChangePreviousAt:authoritativeProfile.usernameChangeLastAt||null
+      }:{})
+    };
     applyProfilePreferences();
     $("profileHeadingName").textContent=displayName;
     $("profileHeadingHandle").textContent=data.publicHandle?`@${data.publicHandle}`:"Set a username to connect with people.";
@@ -1980,10 +2029,12 @@ async function deleteAccount() {
       await Promise.all(snapshot.docs.map(item=>deleteDoc(item.ref)));
     }
     await deleteDoc(doc(db,"publicAffirmations",currentUser.uid));
-    await deleteDoc(doc(db,"publicProfiles",currentUser.uid));
-    if(state.profile.publicHandle)await deleteDoc(doc(db,"usernames",state.profile.publicHandle));
     if(state.profile.avatarPath)await deleteDoc(storageRef(storage,state.profile.avatarPath));
-    await deleteDoc(doc(db,"users",currentUser.uid));
+    const accountBatch=writeBatch(db);
+    accountBatch.delete(doc(db,"publicProfiles",currentUser.uid));
+    if(state.profile.publicHandle)accountBatch.delete(doc(db,"usernames",state.profile.publicHandle));
+    accountBatch.delete(doc(db,"users",currentUser.uid));
+    await accountBatch.commit();
     await deleteUser(currentUser);
     toast("Account deleted");
   }catch(error){

@@ -15,6 +15,62 @@ service cloud.firestore {
           && !('claims' in request.resource.data);
     }
 
+    function profileUsername(data) {
+      let publicHandle = data.get('publicHandle', '');
+      let username = data.get('username', '');
+      return publicHandle is string && publicHandle.size() > 0
+          ? publicHandle
+          : username is string ? username : '';
+    }
+
+    function usernameRecordsAfter(userId, username) {
+      return username == ''
+          || (
+            existsAfter(/databases/$(database)/documents/users/$(userId))
+            && profileUsername(getAfter(/databases/$(database)/documents/users/$(userId)).data) == username
+            && existsAfter(usernamePath(username))
+            && getAfter(usernamePath(username)).data.uid == userId
+            && getAfter(usernamePath(username)).data.username == username
+            && existsAfter(/databases/$(database)/documents/publicProfiles/$(userId))
+            && getAfter(/databases/$(database)/documents/publicProfiles/$(userId)).data.handle == username
+          );
+    }
+
+    function usernameChangeMetadataUnchanged() {
+      return request.resource.data.get('usernameChangeLastAt', null)
+              == resource.data.get('usernameChangeLastAt', null)
+          && request.resource.data.get('usernameChangePreviousAt', null)
+              == resource.data.get('usernameChangePreviousAt', null);
+    }
+
+    function validUsernameChange() {
+      let oldHandle = profileUsername(resource.data);
+      let newHandle = profileUsername(request.resource.data);
+      let cutoff = request.time - duration.value(30, 'd');
+      return newHandle is string
+          && request.resource.data.get('username', newHandle) == newHandle
+          && (
+            newHandle == oldHandle
+            ? usernameChangeMetadataUnchanged()
+            : oldHandle == ''
+              ? (newHandle == '' || newHandle.matches('^[a-z0-9._-]{3,20}$'))
+                && usernameChangeMetadataUnchanged()
+                && usernameRecordsAfter(request.auth.uid, newHandle)
+              : newHandle.matches('^[a-z0-9._-]{3,20}$')
+                && request.resource.data.username == newHandle
+                && request.resource.data.usernameChangeLastAt == request.time
+                && request.resource.data.get('usernameChangePreviousAt', null)
+                    == resource.data.get('usernameChangeLastAt', null)
+                && usernameRecordsAfter(request.auth.uid, newHandle)
+                && !(
+                  ('usernameChangeLastAt' in resource.data)
+                  && resource.data.usernameChangeLastAt > cutoff
+                  && ('usernameChangePreviousAt' in resource.data)
+                  && resource.data.usernameChangePreviousAt > cutoff
+                )
+          );
+    }
+
     function usernamePath(username) {
       return /databases/$(database)/documents/usernames/$(username);
     }
@@ -125,6 +181,8 @@ service cloud.firestore {
       let data = request.resource.data;
       return data.keys().hasOnly(['uid', 'handle', 'displayName', 'bio', 'updatedAt'])
           && data.uid == userId
+          && existsAfter(/databases/$(database)/documents/users/$(userId))
+          && profileUsername(getAfter(/databases/$(database)/documents/users/$(userId)).data) == data.handle
           && data.handle is string
           && data.displayName is string
           && data.displayName.size() > 0
@@ -142,8 +200,17 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read, delete: if ownsUser(userId);
-      allow create, update: if ownsUser(userId) && safeProfileChanges();
+      allow read: if ownsUser(userId);
+      allow create: if ownsUser(userId) && safeProfileChanges();
+      allow update: if ownsUser(userId)
+          && safeProfileChanges()
+          && validUsernameChange();
+      allow delete: if ownsUser(userId)
+          && !existsAfter(/databases/$(database)/documents/publicProfiles/$(userId))
+          && (
+            profileUsername(resource.data) == ''
+            || !existsAfter(usernamePath(profileUsername(resource.data)))
+          );
 
       match /likedNotes/{noteId} {
         allow read: if ownsUser(userId);
@@ -195,13 +262,26 @@ service cloud.firestore {
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.username == username
           && username.matches('^[a-z0-9._-]{3,20}$')
+          && existsAfter(/databases/$(database)/documents/users/$(request.auth.uid))
+          && profileUsername(getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data) == username
+          && existsAfter(/databases/$(database)/documents/publicProfiles/$(request.auth.uid))
+          && getAfter(/databases/$(database)/documents/publicProfiles/$(request.auth.uid)).data.handle == username
           && request.resource.data.keys().hasOnly(['uid', 'username', 'displayName', 'bio', 'updatedAt']);
       allow update: if signedIn()
           && resource.data.uid == request.auth.uid
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.username == username
+          && existsAfter(/databases/$(database)/documents/users/$(request.auth.uid))
+          && profileUsername(getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data) == username
+          && existsAfter(/databases/$(database)/documents/publicProfiles/$(request.auth.uid))
+          && getAfter(/databases/$(database)/documents/publicProfiles/$(request.auth.uid)).data.handle == username
           && request.resource.data.keys().hasOnly(['uid', 'username', 'displayName', 'bio', 'updatedAt']);
-      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+      allow delete: if signedIn()
+          && resource.data.uid == request.auth.uid
+          && (
+            !existsAfter(/databases/$(database)/documents/users/$(request.auth.uid))
+            || profileUsername(getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data) != username
+          );
     }
 
     match /connectionRequests/{requestId} {
@@ -286,7 +366,11 @@ service cloud.firestore {
       allow get: if signedIn();
       allow list: if false;
       allow create, update: if ownsUser(userId) && validPublicProfile(userId);
-      allow delete: if ownsUser(userId);
+      allow delete: if ownsUser(userId)
+          && (
+            !existsAfter(/databases/$(database)/documents/users/$(userId))
+            || profileUsername(getAfter(/databases/$(database)/documents/users/$(userId)).data) != resource.data.handle
+          );
     }
 
     match /publicNotes/{noteId} {
