@@ -1022,6 +1022,9 @@ async function findConnectionProfile(event) {
     result.innerHTML = `<p class="form-error">That is your own username.</p>`;
     return;
   }
+  const submitButton=$("connectionSearchForm").querySelector("button[type='submit']");
+  submitButton.disabled=true;
+  result.innerHTML=`<p class="field-note" role="status">Looking for @${escapeHtml(handle)}…</p>`;
   try {
     const snapshot = await getDoc(doc(db, "usernames", handle));
     if (!snapshot.exists()) {
@@ -1033,18 +1036,20 @@ async function findConnectionProfile(event) {
       result.innerHTML = `<p>That is your own username.</p>`;
       return;
     }
-    const [connectionSnapshot, existingRequest, incomingRequest] = await Promise.all([
+    const [connectionSnapshot, requestSnapshot] = await Promise.all([
       getDocs(query(socialCollections.connections, where("memberIds", "array-contains", currentUser.uid))),
-      getDoc(doc(db, "connectionRequests", `${currentUser.uid}_${profile.uid}`)),
-      getDoc(doc(db, "connectionRequests", `${profile.uid}_${currentUser.uid}`))
+      getDocs(query(socialCollections.requests, where("participantIds", "array-contains", currentUser.uid)))
     ]);
     const alreadyConnected = connectionSnapshot.docs.some(item=>item.data().memberIds.includes(profile.uid));
-    const request = existingRequest.exists() ? existingRequest.data() : null;
-    const incoming = incomingRequest.exists() ? incomingRequest.data() : null;
-    result.innerHTML = `<article class="public-profile"><p class="eyebrow">Public profile</p><h3>${escapeHtml(profile.displayName)}</h3><p>@${escapeHtml(profile.handle)}</p>${profile.bio?`<p>${escapeHtml(profile.bio)}</p>`:""}${alreadyConnected?`<p class="field-note">You are already connected.</p>`:request?.state==="pending"?`<p class="field-note">Your request is pending.</p>`:request?.state==="accepted"?`<p class="field-note">This person is already connected.</p>`:request?.state==="declined"?`<p class="field-note">Your previous request was declined.</p>`:incoming?.state==="pending"?`<p class="field-note">This person has already sent you a request. Review it in Connection requests.</p>`:`<button id="sendConnectionRequestBtn" class="primary-button">Send connection request</button>`}</article>`;
+    const requests=requestSnapshot.docs.map(item=>item.data());
+    const request=requests.find(item=>item.senderId===currentUser.uid&&item.recipientId===profile.uid)||null;
+    const incoming=requests.find(item=>item.senderId===profile.uid&&item.recipientId===currentUser.uid)||null;
+    result.innerHTML = `<article class="public-profile"><p class="eyebrow">Public profile</p><h3>${escapeHtml(profile.displayName)}</h3><p class="profile-handle">@${escapeHtml(profile.handle)}</p>${profile.bio?`<p>${escapeHtml(profile.bio)}</p>`:""}${alreadyConnected?`<p class="field-note">You are already connected.</p>`:request?.state==="pending"?`<p class="field-note">Your request is pending.</p>`:request?.state==="accepted"?`<p class="field-note">This person is already connected.</p>`:request?.state==="declined"?`<p class="field-note">Your previous request was declined.</p>`:incoming?.state==="pending"?`<p class="field-note">This person has already sent you a request. Review it in Connection requests.</p>`:`<button id="sendConnectionRequestBtn" class="primary-button" type="button">Send connection request</button>`}</article>`;
     $("sendConnectionRequestBtn")?.addEventListener("click",()=>sendConnectionRequest(profile));
   } catch (error) {
     result.innerHTML = `<p class="form-error">Could not look up that profile: ${escapeHtml(error.message)}</p>`;
+  } finally {
+    submitButton.disabled=false;
   }
 }
 
