@@ -143,8 +143,6 @@ body.dark .related-topic{color:#eff5ef;border-color:#56675d}
 .profile-photo-stage>span[hidden]{display:none}
 .profile-avatar-initial{display:grid;place-items:center;width:54px;height:54px;border-radius:50%;background:#c9d5c9;color:var(--forest);font-size:1.5rem;font-weight:900}
 .profile-handle{text-align:center;color:#e4c875;font-weight:800;margin:3px 0 12px}
-.profile-photo-choice{display:block;text-align:center;margin:0 0 12px;padding:10px 12px;border:1px solid rgba(255,255,255,.25);border-radius:8px;color:#fffdf8;font-weight:750;cursor:pointer}
-.profile-avatar-input{display:none}
 .profile-avatar-presets{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:0 0 10px}
 .profile-avatar-presets button{min-height:40px;border:1px solid #d8d8d2;border-radius:8px;background:#fff;color:var(--charcoal);font-size:1.15rem;cursor:pointer}
 .profile-avatar-presets button[aria-pressed="true"]{outline:2px solid #e8bc5c;outline-offset:1px}

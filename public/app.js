@@ -10,7 +10,7 @@ import {
   collectionGroup, runTransaction, getCountFromServer
 } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
 import {
-  getStorage, ref as storageRef, uploadBytes, getDownloadURL
+  getStorage, ref as storageRef
 } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-storage.js";
 
 const firebaseConfig = {
@@ -1741,8 +1741,6 @@ function renderProfile() {
             <img id="profileAvatarImage" alt="" ${state.profile.avatarUrl?"":"hidden"} />
             <span id="profileAvatarPlaceholder"><span id="profileAvatarSymbol" hidden></span><span id="profileAvatarInitial" class="profile-avatar-initial">${escapeHtml(displayName[0]?.toUpperCase()||"M")}</span><span id="profileAvatarPrompt">Add a photo</span></span>
         </div>
-        <label class="profile-photo-choice" for="profileAvatarInput">Choose Photo</label>
-        <input id="profileAvatarInput" class="profile-avatar-input" type="file" accept="image/*" />
         <div class="profile-avatar-presets" aria-label="Choose a profile illustration">${profileAvatarSymbols.map(symbol=>`<button type="button" data-profile-avatar="${symbol}" aria-label="Choose ${symbol}" aria-pressed="${state.profile.avatarSymbol===symbol}">${symbol}</button>`).join("")}</div>
         <h2 id="profileHeadingName">${escapeHtml(displayName)}</h2>
         <p id="profileHeadingHandle" class="profile-handle">${state.profile.publicHandle?`@${escapeHtml(state.profile.publicHandle)}`:""}</p>
@@ -1809,7 +1807,6 @@ function renderProfile() {
     </section>`;
   applyProfilePreferences();
   $("profilePageForm").addEventListener("submit",saveProfilePage);
-  $("profileAvatarInput").addEventListener("change",uploadProfileAvatar);
   $("profileSignOutBtn").addEventListener("click",signOutUser);
   $("profileDeactivateBtn").addEventListener("click",()=>requestAccountChange("deactivation"));
   $("profileRequestDeletionBtn").addEventListener("click",()=>requestAccountChange("deletion"));
@@ -1904,31 +1901,6 @@ async function saveProfilePage(event) {
     catch(error) { toast("Profile saved, but the sign-in display name could not be updated: "+error.message); }
   }catch(error){
     $("profileError").textContent="Could not save your profile: "+error.message;
-  }
-}
-
-async function uploadProfileAvatar(event) {
-  const file=event.target.files?.[0];
-  if(!file)return;
-  if(!file.type.startsWith("image/")||file.size>5*1024*1024){
-    $("profileError").textContent="Choose an image smaller than 5 MB.";
-    event.target.value="";
-    return;
-  }
-  const extension=file.name.split(".").pop()?.replace(/[^a-zA-Z0-9]/g,"")||"image";
-  const path=`avatars/${currentUser.uid}/${crypto.randomUUID()}.${extension}`;
-  const imageRef=storageRef(storage,path);
-  $("profileError").textContent="";
-  try{
-    await uploadBytes(imageRef,file,{contentType:file.type});
-    const avatarUrl=await getDownloadURL(imageRef);
-    const profileState={...(state.profile.profileState||{}),bio:state.profile.bio||"",username:state.profile.publicHandle||"",avatar:avatarUrl};
-    await setDoc(doc(db,"users",currentUser.uid),{avatarUrl,avatarSymbol:"",avatarPath:path,profileState,updatedAt:serverTimestamp()},{merge:true});
-    state.profile={...state.profile,avatarUrl,avatarSymbol:"",avatarPath:path,profileState};
-    renderProfileAvatar();
-    toast("Profile photo updated");
-  }catch(error){
-    $("profileError").textContent="Could not upload profile photo: "+error.message;
   }
 }
 
