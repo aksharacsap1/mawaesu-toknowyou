@@ -310,7 +310,12 @@ body.dark .color-detail{border-left-color:#dbe9df}
 .room-element-controls button{min-height:40px;padding:8px 14px;border:1px solid var(--line);border-radius:999px;background:var(--cream);color:var(--charcoal);font-weight:750;cursor:pointer}
 .room-element-controls button[aria-pressed="true"]{border-color:var(--forest);background:var(--forest);color:#fff}
 .room-element-detail{border-left:4px solid var(--forest)}
-.room-element-detail p:last-child{max-width:780px;color:var(--muted);line-height:1.65}
+.room-element-detail>p:not(.eyebrow){max-width:780px;color:var(--muted);line-height:1.65}
+.room-personalized-detail{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:18px 0}
+.room-personalized-detail p{display:grid;align-content:start;gap:8px;margin:0;padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--cream)}
+.room-personalized-detail strong{font-size:.84rem;color:var(--forest)}
+.room-personalized-detail span,.room-personalization-caveat,.room-profile-note{color:var(--muted);font-size:.9rem;line-height:1.6}
+.room-personalization-caveat{margin:8px 0 0;font-size:.82rem}
 .room-needs-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
 .room-needs-card{padding:18px;border-radius:14px}
 .room-needs-card h3{margin:4px 0 8px;font:1.16rem var(--serif)}
@@ -320,6 +325,7 @@ body.dark .color-detail{border-left-color:#dbe9df}
 .room-sensory-list>div{display:grid;grid-template-columns:minmax(120px,.32fr) 1fr;gap:16px;padding:13px 0;border-top:1px solid var(--line)}
 .room-sensory-list strong{font-size:.88rem}
 .room-sensory-list span{color:var(--muted);font-size:.88rem;line-height:1.5}
+.room-sensory-profile>.field-note{margin-top:16px}
 .room-plan-card{background:linear-gradient(120deg,#fffdf8,#f2e8d8)}
 .room-plan-card>p:not(.eyebrow){max-width:760px;color:var(--muted);line-height:1.6}
 .room-plan-card .primary-button{display:inline-flex;margin-top:5px;text-decoration:none}
@@ -462,6 +468,7 @@ body.large-text{font-size:18px}
   .color-swatch-chip{height:78px}
   .color-detail-swatch{width:78px;height:78px}
   .room-analysis-intro{align-items:flex-start;flex-direction:column}
+  .room-personalized-detail{grid-template-columns:1fr}
   .room-needs-grid{grid-template-columns:1fr}
   .room-sensory-list>div{grid-template-columns:1fr;gap:4px}
   .analysis-section-heading{flex-direction:column}
