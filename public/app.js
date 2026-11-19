@@ -27,8 +27,17 @@ const db = getFirestore(app);
 const storage = getStorage(app);
 
 const $ = (id) => document.getElementById(id);
-if (new URLSearchParams(location.search).get("route") === "assessment" && !location.hash) {
-  history.replaceState(null, "", `${location.pathname}#assessment`);
+const incomingParams=new URLSearchParams(location.search);
+const legacyRouteAliases={
+  openingPage:"assessment",assessmentPage:"assessment",quizPage:"quiz",
+  resultPage:"archetype",archetypePage:"archetype",colorPage:"color-analysis",
+  colorAnalysisPage:"color-analysis",roomIntroPage:"room-analysis",
+  roomAnalysisPage:"room-analysis",profilePage:"profile"
+};
+const incomingRoute=legacyRouteAliases[incomingParams.get("view")]
+  || (incomingParams.get("route")==="assessment"?"assessment":null);
+if(incomingRoute&&!location.hash){
+  history.replaceState(null,"",`${location.pathname}#${incomingRoute}`);
 }
 const routeContent = $("routeContent");
 let currentUser = null;
@@ -333,6 +342,7 @@ function navigate() {
   const route = requestedRoute === "discovered-me" ? "profile" : requestedRoute;
   if(requestedRoute!==route)history.replaceState(null,"","#profile");
   document.body.classList.toggle("profile-view",route==="profile");
+  document.body.dataset.route=route;
   document.querySelectorAll("[data-route]").forEach(link => link.classList.toggle("active",link.dataset.route===route));
   const renderer = renderers[route] || renderHome;
   renderer();
@@ -1280,47 +1290,133 @@ function renderArchetypeResult() {
   const archetype=saved[0];
   if(!archetype){routeContent.innerHTML=`${pageHeading("Self-discovery","Your archetype","Take the reflection quiz to see your result.")}<a class="primary-button" href="#assessment">Start the quiz</a>`;return;}
   const details=(archetype.desc||"").split("\n").map(line=>line.split(": "));
-  routeContent.innerHTML=`${pageHeading("Your archetype",escapeHtml(archetype.name),"An invitation to reflect—not a diagnosis, fixed identity, or prediction.")}
-    <section class="panel archetype-result-panel">
-      <p class="archetype-mantra">${escapeHtml((details.find(item=>item[0]==="Mantra")?.[1]||"").replace(/^['"]|['"]$/g,""))}</p>
-      <dl>${details.filter(item=>item.length>1&&item[0]!=="Mantra").map(item=>`<div><dt>${escapeHtml(item[0])}</dt><dd>${escapeHtml(item.slice(1).join(": "))}</dd></div>`).join("")}</dl>
-      <p>Your answers and saved results are private to your account. You can revisit or retake this reflection at any time.</p>
-      <div class="profile-tool-links"><a class="primary-button" href="#color-analysis">Explore your colours</a><a class="secondary-button" href="#room-analysis">Explore your space</a><a class="text-button" href="#assessment">Retake the quiz</a><a class="text-button" href="#profile">Return to Profile</a></div>
+  const scoreValue=state.profile.archetypeScore??localStorage.getItem("archetypeScore");
+  const score=scoreValue===null||scoreValue===""?null:Number(scoreValue);
+  const palette=score===null?null:savedColorProfiles.find(item=>score>=item.range[0]&&score<=item.range[1]);
+  const colors=palette?.core||["#173d32","#b7c8a9","#f2c14e","#65445f","#df8165"];
+  const mantra=(details.find(item=>item[0]==="Mantra")?.[1]||"").replace(/^['"]|['"]$/g,"");
+  const profileDetails=details.filter(item=>item.length>1&&item[0]!=="Mantra");
+  const symbol=archetype.name.trim().split(/\s+/)[0];
+  routeContent.innerHTML=`${pageHeading("Your reflection","Meet your archetype","A thoughtful snapshot of patterns in your answers—an invitation to reflect, not a diagnosis or a fixed identity.")}
+    <section class="archetype-experience">
+      <article class="archetype-reveal-card" style="--archetype-a:${colors[0]};--archetype-b:${colors[1]};--archetype-c:${colors[2]};--archetype-d:${colors[3]};--archetype-e:${colors[4]}">
+        <div class="archetype-reveal-orb" aria-hidden="true"><span>${escapeHtml(symbol)}</span></div>
+        <p class="eyebrow">A reflection to carry with you</p>
+        <h2>${escapeHtml(archetype.name)}</h2>
+        ${mantra?`<blockquote>“${escapeHtml(mantra)}”</blockquote>`:""}
+        <div class="archetype-reveal-swatches" aria-label="Colours from your reflection">${colors.map(color=>`<span style="--swatch-color:${color}" aria-label="${color}"></span>`).join("")}</div>
+      </article>
+      <section class="archetype-result-details panel" aria-labelledby="archetypeDetailsHeading">
+        <p class="eyebrow">A few things to notice</p><h2 id="archetypeDetailsHeading">${escapeHtml(archetype.name)}</h2>
+        <dl>${profileDetails.map(item=>`<div><dt>${escapeHtml(item[0])}</dt><dd>${escapeHtml(item.slice(1).join(": "))}</dd></div>`).join("")}</dl>
+        <p class="field-note">Your result is private to your account. It is not a clinical assessment, a prediction, or a label you have to keep.</p>
+      </section>
+      <section class="archetype-share-section panel">
+        <div><p class="eyebrow">Keep or share your reflection</p><h2>Your archetype share card</h2><p>Create a card with your archetype and mantra. Sharing is optional; the card does not include your answers or account details.</p></div>
+        <article class="archetype-share-card" id="archetypeShareCard" style="--archetype-a:${colors[0]};--archetype-b:${colors[1]};--archetype-c:${colors[2]};--archetype-d:${colors[3]};--archetype-e:${colors[4]}" aria-label="Preview of your archetype share card">
+          <div class="share-card-brand"><span class="share-card-mark">M</span><span>MAWAESU</span><small>KNOW YOURSELF</small></div>
+          <div class="share-card-orb" aria-hidden="true">${escapeHtml(symbol)}</div>
+          <p class="share-card-label">MY REFLECTION</p><h3>${escapeHtml(archetype.name)}</h3>
+          ${mantra?`<blockquote>“${escapeHtml(mantra)}”</blockquote>`:""}
+          <div class="share-card-colors" aria-label="Palette">${colors.map(color=>`<span style="--swatch-color:${color}"></span>`).join("")}</div>
+          <small class="share-card-footer">A starting point for reflection · mawaesu</small>
+        </article>
+        <div class="share-card-actions"><button id="downloadArchetypeCardBtn" class="secondary-button" type="button">Download share card</button><button id="shareArchetypeCardBtn" class="primary-button" type="button">Share reflection</button></div>
+      </section>
+      <nav class="profile-tool-links archetype-route-actions" aria-label="Continue exploring">
+        <a class="primary-button" href="#color-analysis">Explore your colours</a><a class="secondary-button" href="#room-analysis">Explore your space</a><a class="text-button" href="#assessment">Retake the quiz</a><a class="text-button" href="#profile">Return to Profile</a>
+      </nav>
     </section>`;
+  $("downloadArchetypeCardBtn").addEventListener("click",()=>downloadArchetypeShareCard(archetype,mantra,colors));
+  $("shareArchetypeCardBtn").addEventListener("click",()=>shareArchetypeShareCard(archetype,mantra,colors));
 }
 
 function renderColorAnalysisPage() {
-  const score=Number(state.profile.archetypeScore??localStorage.getItem("archetypeScore"));
+  const scoreValue=state.profile.archetypeScore??localStorage.getItem("archetypeScore");
+  const score=scoreValue===null||scoreValue===""?NaN:Number(scoreValue);
   const palette=savedColorProfiles.find(item=>Number.isFinite(score)&&score>=item.range[0]&&score<=item.range[1]);
   const archetype=state.profile.archetypeTopThree?.[0];
-  if(!palette){routeContent.innerHTML=`${pageHeading("Colour psychology","Colour Analysis","Explore a tailored palette. Colour perception and preference differ across people, cultures, lighting, and displays.")}<a class="primary-button" href="#assessment">Take the quiz</a>`;return;}
-  const swatches=(colors,group)=>colors.map((hex,index)=>`<button class="analysis-swatch" type="button" data-analysis-color="${hex}" aria-label="${group} colour ${index+1}, ${hex}" style="--swatch-color:${hex}"></button>`).join("");
-  routeContent.innerHTML=`${pageHeading("Colour psychology","Colour Analysis","A tailored palette and notes for your archetype — core colours first, then supporting colours.")}
-    <section class="analysis-page-grid">
-      <article class="panel"><h2>${escapeHtml(palette.title)}</h2><p>${escapeHtml(palette.note)}</p><p class="field-note">Matched to ${escapeHtml(archetype?.name||"your saved reflection")}. These are design suggestions, not guaranteed emotional or health effects.</p></article>
-      <article class="panel"><h2>Core palette</h2><div class="analysis-swatches">${swatches(palette.core,"Core")}</div></article>
-      <article class="panel"><h2>Supporting colours</h2><div class="analysis-swatches">${swatches(palette.support,"Supporting")}</div></article>
-      <article id="analysisColorDetail" class="panel"><h2>Tap a colour</h2><p>Select a swatch to view its HEX value and description.</p></article>
-      <div class="profile-tool-links"><a class="secondary-button" href="#archetype">Back to archetype</a><a class="primary-button" href="#room-analysis">Next: room analysis</a></div>
+  if(!palette){routeContent.innerHTML=`${pageHeading("Colour psychology","Colour Analysis","Explore a personal design palette. Colour preferences and associations vary with culture, context, lighting, and individual experience.")}<section class="analysis-empty panel"><p>Take the reflection quiz first to create your palette.</p><a class="primary-button" href="#assessment">Take the quiz</a></section>`;return;}
+  routeContent.innerHTML=`${pageHeading("Colour psychology","Colour Analysis","A palette inspired by your reflection. Use these colours as creative prompts—not as guaranteed mood or health effects.")}
+    <section class="color-analysis-experience">
+      <article class="color-analysis-hero panel" style="--palette-a:${palette.core[0]};--palette-b:${palette.core[1]};--palette-c:${palette.core[2]};--palette-d:${palette.core[3]};--palette-e:${palette.core[4]}">
+        <div class="color-hero-copy"><p class="eyebrow">Your palette · ${escapeHtml(archetype?.name||"Personal reflection")}</p><h2>${escapeHtml(palette.title)}</h2><p>${escapeHtml(palette.note)}</p><span class="color-hero-note">A starting point for spaces, projects, and self-expression</span></div>
+        <div class="color-hero-ribbon" aria-label="Five core palette colours">${palette.core.map((color,index)=>`<span style="--swatch-color:${color}" aria-label="Core colour ${index+1}: ${color}"></span>`).join("")}</div>
+      </article>
+      <section class="color-palette-section panel" aria-labelledby="corePaletteHeading">
+        <div class="analysis-section-heading"><div><p class="eyebrow">The foundation</p><h2 id="corePaletteHeading">Core colours</h2><p>Tap a colour to explore its tone and copy its HEX value.</p></div><button id="copyPaletteBtn" class="text-button" type="button">Copy core palette</button></div>
+        ${renderAnalysisSwatches(palette.core,"Core")}
+      </section>
+      <section class="color-palette-section panel" aria-labelledby="supportPaletteHeading">
+        <div class="analysis-section-heading"><div><p class="eyebrow">The accents</p><h2 id="supportPaletteHeading">Supporting colours</h2><p>Use these as small accents, contrasts, or alternatives to suit your own taste.</p></div></div>
+        ${renderAnalysisSwatches(palette.support,"Supporting")}
+      </section>
+      <article id="analysisColorDetail" class="color-detail-panel panel" aria-live="polite">
+        <div class="color-detail-placeholder"><span class="color-detail-mark" aria-hidden="true">✦</span><div><h2>Choose a colour</h2><p>Select any swatch above to see its HEX value, colour family, and a short design note.</p></div></div>
+      </article>
+      <p class="color-science-note">These are design associations, not scientific predictions. A colour's appearance changes with screens, lighting, surrounding colours, and personal or cultural context.</p>
+      <nav class="profile-tool-links analysis-route-actions" aria-label="Continue exploring"><a class="secondary-button" href="#archetype">Back to archetype</a><a class="primary-button" href="#room-analysis">Next: room analysis</a><a class="text-button" href="#profile">Return to Profile</a></nav>
     </section>`;
   document.querySelectorAll("[data-analysis-color]").forEach(button=>button.addEventListener("click",()=>{
     const color=button.dataset.analysisColor;
-    $("analysisColorDetail").innerHTML=`<h2>${escapeHtml(color)}</h2><div class="analysis-color-preview" style="background:${escapeHtml(color)}"></div><p>This colour is part of your saved ${escapeHtml(palette.title)} palette. Its appearance and associations can vary with context.</p><button class="text-button" type="button" data-copy-analysis-color="${escapeHtml(color)}">Copy HEX</button>`;
+    const description=describeAnalysisColor(color);
+    document.querySelectorAll("[data-analysis-color]").forEach(swatch=>swatch.setAttribute("aria-pressed",String(swatch===button)));
+    $("analysisColorDetail").innerHTML=`<div class="color-detail-swatch" style="--swatch-color:${escapeHtml(color)}" aria-hidden="true"></div><div class="color-detail-copy"><p class="eyebrow">${escapeHtml(button.dataset.colorGroup)} colour · ${escapeHtml(description.family)}</p><h2>${escapeHtml(description.name)}</h2><p class="color-detail-hex">${escapeHtml(color.toUpperCase())}</p><p>${escapeHtml(description.note)}</p><button class="secondary-button" type="button" data-copy-analysis-color="${escapeHtml(color)}">Copy HEX</button></div>`;
     $("analysisColorDetail").querySelector("[data-copy-analysis-color]").addEventListener("click",async()=>{
       try{await navigator.clipboard.writeText(color);toast(`${color} copied`);}catch(error){toast("Could not copy the colour code: "+error.message);}
     });
   }));
+  $("copyPaletteBtn").addEventListener("click",async()=>{
+    try{await navigator.clipboard.writeText(palette.core.join(", "));toast("Core palette copied");}
+    catch(error){toast("Could not copy the palette: "+error.message);}
+  });
 }
 
 function renderRoomAnalysisPage() {
   const archetype=state.profile.archetypeTopThree?.[0];
-  routeContent.innerHTML=`${pageHeading("Environmental design","Room Analysis","A starting point for considering how your space works for you. These suggestions are design prompts, not clinical or guaranteed effects.")}
-    <section class="analysis-page-grid">
-      <article class="panel"><h2>Your reflection</h2><p>${archetype?`<strong>${escapeHtml(archetype.name)}</strong><br>${escapeHtml(archetype.desc||"")}`:"Complete the self-discovery quiz to see your saved reflection."}</p></article>
-      <article class="panel"><h2>Start with your needs</h2><ul><li>Keep a clear, comfortable route through the room.</li><li>Choose lighting that is adjustable and suits the task.</li><li>Make frequently used items reachable and storage practical.</li><li>Adapt suggestions to your access needs, budget, culture, climate, and living arrangements.</li></ul></article>
-      <article class="panel"><h2>Plan a room</h2><p>Describe a room and explore practical ideas for light, atmosphere, storage, and circulation. You can save the plan privately.</p><a class="primary-button" href="#spaces">Open room description planner</a></article>
-      <div class="profile-tool-links"><a class="secondary-button" href="#color-analysis">Back to colour analysis</a><a class="secondary-button" href="#profile">Back to Profile</a></div>
+  const scoreValue=state.profile.archetypeScore??localStorage.getItem("archetypeScore");
+  const score=scoreValue===null||scoreValue===""?NaN:Number(scoreValue);
+  const palette=savedColorProfiles.find(item=>Number.isFinite(score)&&score>=item.range[0]&&score<=item.range[1]);
+  const colors=palette?.core||["#a3bfa8","#7fb7b7","#b2d4e1","#f5f1e3","#d8a7a7"];
+  const room=state.rooms[state.rooms.length-1];
+  routeContent.innerHTML=`${pageHeading("Environmental design","Room Analysis","Explore how layout, light, colour, and comfort may support the way you want to use your space. These are adaptable design prompts, not clinical advice.")}
+    <section class="room-analysis-experience">
+      <article class="room-analysis-intro panel"><div><p class="eyebrow">A room shaped around you</p><h2>${archetype?escapeHtml(archetype.name):"Begin with what feels useful"}</h2><p>${archetype?"Let your result inspire ideas, while your real preferences, needs, and living situation guide the choices.":"You can explore the room ideas now, then take the reflection quiz whenever you are ready."}</p></div><div class="room-intro-swatches" aria-label="Room colour suggestions">${colors.slice(0,4).map(color=>`<span style="--swatch-color:${color}"></span>`).join("")}</div></article>
+      <section class="room-visual-section panel" aria-labelledby="roomVisualHeading">
+        <div class="analysis-section-heading"><div><p class="eyebrow">Explore the details</p><h2 id="roomVisualHeading">Your room</h2><p>Choose the walls, flooring, furniture, or lighting to see practical ideas.</p></div></div>
+        <div class="room-visual-host">${renderRoomAnalysisIllustration(colors)}</div>
+        <p class="room-visual-hint">Select a room element in the illustration or use the buttons below it.</p>
+        <div class="room-element-controls" role="group" aria-label="Explore room elements">${["Walls","Flooring","Furniture","Lighting"].map((item,index)=>`<button type="button" data-room-element="${item}" aria-pressed="${index===0}">${item}</button>`).join("")}</div>
+      </section>
+      <article id="roomElementDetail" class="room-element-detail panel" aria-live="polite">
+        <p class="eyebrow">Walls</p><h2>Make the room feel like yours</h2><p>Try a colour, artwork, or a small display that feels meaningful to you. If you share or rent, consider temporary changes you can comfortably reverse.</p>
+      </article>
+      <section class="room-needs-grid" aria-label="Useful room considerations">
+        <article class="room-needs-card panel"><span class="room-needs-icon" aria-hidden="true">☼</span><p class="eyebrow">Light</p><h3>Give yourself options</h3><p>Use task lighting where you need it and adjust brightness or glare to suit your comfort and activity.</p></article>
+        <article class="room-needs-card panel"><span class="room-needs-icon" aria-hidden="true">↗</span><p class="eyebrow">Movement</p><h3>Keep paths workable</h3><p>Arrange frequently used items within comfortable reach and leave a clear route that works for your body and mobility.</p></article>
+        <article class="room-needs-card panel"><span class="room-needs-icon" aria-hidden="true">◌</span><p class="eyebrow">Personal choice</p><h3>Start with your needs</h3><p>Consider noise, privacy, shared use, sensory preferences, culture, climate, access needs, and budget.</p></article>
+      </section>
+      <section class="room-sensory-profile panel"><p class="eyebrow">A flexible checklist</p><h2>Notice what supports you</h2><div class="room-sensory-list"><div><strong>Stimulation</strong><span>Do you prefer a quieter setting, lively detail, or different options at different times?</span></div><div><strong>Layout</strong><span>Can you move around, find belongings, and use the space without unnecessary effort?</span></div><div><strong>Window and light</strong><span>Would adjustable daylight, privacy, shade, or softer task lighting be useful?</span></div><div><strong>Personal touches</strong><span>Which objects, colours, textures, or routines make this space feel welcoming to you?</span></div></div></section>
+      <section class="room-plan-card panel"><div><p class="eyebrow">Put it into practice</p><h2>Your space, in your words</h2>${room?`<p class="room-plan-saved">Latest saved plan: <strong>${escapeHtml(room.type||"Room")}</strong>${room.atmosphere?` · ${escapeHtml(room.atmosphere)} atmosphere`:""}${room.need?` · Focus: ${escapeHtml(room.need)}`:""}</p>`:`<p>Describe the room, what you would like to feel or do there, and any limits you want to work within. You can save your plan privately.</p>`}<a class="primary-button" href="#spaces">Open room description planner</a></section>
+      <nav class="profile-tool-links analysis-route-actions" aria-label="Continue exploring"><a class="secondary-button" href="#color-analysis">Back to colour analysis</a><a class="text-button" href="#profile">Return to Profile</a></nav>
     </section>`;
+  const roomAdvice={
+    Walls:["Walls","Make the room feel like yours","Try a colour, artwork, or a small display that feels meaningful to you. If you share or rent, consider temporary changes you can comfortably reverse."],
+    Flooring:["Flooring","Make movement comfortable","Keep walkways clear and choose a surface or rug that works with your mobility, climate, cleaning needs, and budget. Secure loose rugs if they could create a trip hazard."],
+    Furniture:["Furniture","Make everyday actions easier","Place frequently used items within comfortable reach. Leave enough room to move, and choose flexible pieces that suit the way you use the space."],
+    Lighting:["Lighting","Layer light around your activities","Pair adjustable task lighting with comfortable ambient light. Consider glare, daylight, accessibility, and whether you share the room."]
+  };
+  const showRoomElement=key=>{
+    const [label,title,text]=roomAdvice[key];
+    document.querySelectorAll("[data-room-element]").forEach(button=>button.setAttribute("aria-pressed",String(button.dataset.roomElement===key)));
+    document.querySelectorAll("[data-room-part]").forEach(part=>part.classList.toggle("active",part.dataset.roomPart===key));
+    $("roomElementDetail").innerHTML=`<p class="eyebrow">${label}</p><h2>${title}</h2><p>${text}</p>`;
+  };
+  document.querySelectorAll("[data-room-element]").forEach(button=>button.addEventListener("click",()=>showRoomElement(button.dataset.roomElement)));
+  document.querySelectorAll("[data-room-part]").forEach(part=>{
+    part.addEventListener("click",()=>showRoomElement(part.dataset.roomPart));
+    part.addEventListener("keydown",event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();showRoomElement(part.dataset.roomPart);}});
+  });
 }
 
 const savedColorProfiles = [
@@ -1345,6 +1441,215 @@ const savedColorProfiles = [
   {range:[91,95],title:"Loving Flame",note:"Warm reds and apricot balanced by gentle complementary shades.",core:["#E74C3C","#FF7F50","#F7D1D1","#FFDAB3","#BDE0D4"],support:["#A3C4F3","#FFE066","#E6D0F0","#B3E0C3","#F7D594"]},
   {range:[96,100],title:"Luminous Peace",note:"Bright soft neutrals with sky, lilac, and green accents.",core:["#FFE4B2","#FFF5E1","#CDE7F0","#E6D0F0","#B3E0C3"],support:["#FFB6A3","#FFD966","#A3C4F3","#FFDAB3","#F7D1D1"]}
 ];
+
+function describeAnalysisColor(hex) {
+  const channels=hex.match(/[a-f\d]{2}/gi).map(value=>parseInt(value,16)/255);
+  const [red,green,blue]=channels;
+  const max=Math.max(...channels),min=Math.min(...channels),delta=max-min;
+  const lightness=(max+min)/2;
+  const saturation=delta===0?0:delta/(1-Math.abs(2*lightness-1));
+  let hue=0;
+  if(delta){
+    if(max===red)hue=60*(((green-blue)/delta)%6);
+    else if(max===green)hue=60*((blue-red)/delta+2);
+    else hue=60*((red-green)/delta+4);
+    if(hue<0)hue+=360;
+  }
+  const family=saturation<.12
+    ?lightness>.82?"soft white":lightness<.18?"deep neutral":"neutral"
+    :hue<18||hue>=345?"red":hue<42?"orange":hue<68?"yellow":hue<155?"green":hue<195?"teal":hue<250?"blue":hue<290?"violet":"pink";
+  const intensity=saturation<.22?"muted":saturation<.55?"soft":"vivid";
+  const tone=lightness<.28?"deep":lightness<.48?"grounded":lightness<.72?"balanced":"light";
+  const notes={
+    red:"A warm accent that can add contrast and visual emphasis. Try it in small areas alongside a calmer base.",
+    orange:"A warm accent often used to make a palette feel welcoming. Pair it with a quieter neutral if you want balance.",
+    yellow:"A bright note that can help a detail stand out. Softer versions may feel easier to combine across a larger area.",
+    green:"A nature-inspired colour that pairs readily with wood tones and gentle neutrals.",
+    teal:"A blue-green bridge that can add a clear accent without dominating the full palette.",
+    blue:"A cool-toned option that can work as a calm visual base or a crisp contrast, depending on shade and context.",
+    violet:"A distinctive accent that can bring depth and individuality to a palette.",
+    pink:"A flexible accent that can read soft or bold depending on its saturation and surrounding colours.",
+    "soft white":"A light neutral that gives stronger colours room to stand out.",
+    "deep neutral":"A grounding dark neutral that adds contrast and visual weight.",
+    neutral:"A low-chroma neutral that can help neighbouring colours share the palette."
+  };
+  const name=`${tone[0].toUpperCase()+tone.slice(1)} ${intensity} ${family}`;
+  return {family,name,note:notes[family]};
+}
+
+function renderAnalysisSwatches(colors,group) {
+  return `<div class="color-swatch-grid" aria-label="${group} colours">${colors.map((color,index)=>{
+    const description=describeAnalysisColor(color);
+    return `<button class="color-swatch-card" type="button" data-analysis-color="${color}" data-color-group="${group}" aria-label="${group} colour ${index+1}: ${description.name}, ${color}" aria-pressed="false">
+      <span class="color-swatch-chip" style="--swatch-color:${color}" aria-hidden="true"></span>
+      <span class="color-swatch-info"><strong>${escapeHtml(description.name)}</strong><small>${color}</small></span>
+      <span class="color-swatch-index">${String(index+1).padStart(2,"0")}</span>
+    </button>`;
+  }).join("")}</div>`;
+}
+
+function renderRoomAnalysisIllustration(colors) {
+  const [wall,wallSide,furniture,accent,light]=colors;
+  const id=`room-${crypto.randomUUID().replace(/-/g,"")}`;
+  return `<svg class="room-analysis-illustration" viewBox="0 0 680 560" role="img" aria-labelledby="${id}-title ${id}-description" xmlns="http://www.w3.org/2000/svg">
+    <title id="${id}-title">A small, flexible room in perspective</title>
+    <desc id="${id}-description">An illustrated room with two walls, a window, floor, rug, bed, desk, chair, plant, and adjustable lights. Select an element to see room-planning ideas.</desc>
+    <defs>
+      <linearGradient id="${id}-wall-a" x2="1"><stop stop-color="${wallSide}"/><stop offset="1" stop-color="${wall}"/></linearGradient>
+      <linearGradient id="${id}-wall-b" x2="1"><stop stop-color="${wall}"/><stop offset="1" stop-color="${wallSide}"/></linearGradient>
+      <linearGradient id="${id}-floor" x2="1" y2="1"><stop stop-color="#d8cbb7"/><stop offset="1" stop-color="#9d8b75"/></linearGradient>
+      <linearGradient id="${id}-glass" x2="0" y2="1"><stop stop-color="#d9eff5"/><stop offset="1" stop-color="#82b7ca"/></linearGradient>
+      <radialGradient id="${id}-light"><stop stop-color="${light}" stop-opacity=".85"/><stop offset="1" stop-color="${light}" stop-opacity="0"/></radialGradient>
+      <filter id="${id}-shadow" x="-30%" y="-30%" width="160%" height="170%"><feGaussianBlur stdDeviation="9"/></filter>
+    </defs>
+    <ellipse cx="340" cy="500" rx="240" ry="38" fill="#26352f" opacity=".16" filter="url(#${id}-shadow)"/>
+    <g class="room-illustration-layer">
+      <polygon class="room-part-shape" points="95,390 340,515 585,390 340,265" fill="url(#${id}-floor)" stroke="#fffaf0" stroke-opacity=".55" stroke-width="2"/>
+      <path d="M167 404 340 493 513 404M218 379 340 442 462 379M278 348 340 380 402 348" fill="none" stroke="#766954" stroke-opacity=".22" stroke-width="3"/>
+      <polygon points="250,419 340,465 430,419 340,373" fill="${accent}" opacity=".72"/>
+    </g>
+    <g class="room-illustration-layer">
+      <polygon class="room-part-shape" points="95,390 95,150 340,30 340,265" fill="url(#${id}-wall-a)" stroke="#fffaf0" stroke-opacity=".5" stroke-width="2"/>
+      <polygon class="room-part-shape" points="340,265 340,30 585,150 585,390" fill="url(#${id}-wall-b)" stroke="#fffaf0" stroke-opacity=".5" stroke-width="2"/>
+      <polygon points="145,180 248,130 248,270 145,321" fill="#6c5347" opacity=".34"/>
+      <polygon points="154,179 240,137 240,264 154,307" fill="url(#${id}-glass)" stroke="#f8f2e7" stroke-width="6"/>
+      <path d="M197 158v128M154 243l86-42" stroke="#fffaf0" stroke-width="5" opacity=".75"/>
+      <polygon points="430,111 493,142 493,207 430,176" fill="${accent}" opacity=".86"/>
+      <polygon points="439,121 484,143 484,190 439,168" fill="#fffaf0" opacity=".72"/>
+    </g>
+    <g class="room-illustration-layer">
+      <ellipse cx="228" cy="433" rx="95" ry="21" fill="#28352f" opacity=".18"/>
+      <polygon points="134,364 234,414 234,447 134,397" fill="${furniture}"/>
+      <polygon points="134,397 234,447 234,472 134,421" fill="#5b594f"/>
+      <polygon points="134,346 234,396 234,414 134,364" fill="#f3e7d4"/>
+      <polygon points="147,351 187,371 187,394 147,374" fill="#fffaf0"/>
+      <polygon points="190,372 224,389 224,411 190,394" fill="#e1c9ad"/>
+      <polygon points="390,355 470,396 470,411 390,370" fill="${furniture}"/>
+      <polygon points="390,370 470,411 470,431 390,390" fill="#4a514b"/>
+      <polygon points="470,396 493,385 493,402 470,411" fill="${accent}"/>
+      <path d="M401 390v31m57-2v30m18-56v37" stroke="#3b403b" stroke-width="7"/>
+      <polygon points="343,319 366,307 397,323 374,336" fill="${furniture}"/>
+      <path d="M356 328v47m28-32v34" stroke="#51483e" stroke-width="6"/>
+      <rect x="320" y="304" width="12" height="32" rx="3" fill="#66835f"/>
+      <circle cx="326" cy="295" r="18" fill="#7f9d70"/><circle cx="310" cy="304" r="13" fill="#92aa78"/><circle cx="339" cy="307" r="14" fill="#a1b986"/>
+    </g>
+    <g class="room-illustration-layer">
+      <circle cx="492" cy="92" r="72" fill="url(#${id}-light)"/>
+      <path d="M492 28v49" stroke="#51483e" stroke-width="3"/>
+      <path d="M474 80h36l-7 23h-22z" fill="${light}" stroke="#fffaf0" stroke-width="2"/>
+      <path d="m492 106-54 147h108z" fill="${light}" opacity=".14"/>
+      <path d="M279 354v27" stroke="#5d5041" stroke-width="5"/><path d="M264 350h30l-5 12h-20z" fill="${light}"/>
+    </g>
+    <g class="room-hit-areas">
+      <g class="room-part" data-room-part="Walls" tabindex="0" role="button" aria-label="Explore wall and window ideas">
+        <path class="room-part-shape" d="M95 390V150L340 30 585 150V390L340 265Z" fill="transparent" pointer-events="all"/>
+      </g>
+      <g class="room-part" data-room-part="Flooring" tabindex="0" role="button" aria-label="Explore flooring ideas">
+        <polygon class="room-part-shape" points="95,390 340,515 585,390 340,265" fill="transparent" pointer-events="all"/>
+      </g>
+      <g class="room-part" data-room-part="Furniture" tabindex="0" role="button" aria-label="Explore furniture and layout ideas">
+        <polygon class="room-part-shape" points="125,335 246,396 246,480 125,420" fill="transparent" pointer-events="all"/>
+        <polygon class="room-part-shape" points="376,343 503,382 503,457 376,398" fill="transparent" pointer-events="all"/>
+        <polygon class="room-part-shape" points="315,280 405,314 405,380 315,345" fill="transparent" pointer-events="all"/>
+      </g>
+      <g class="room-part" data-room-part="Lighting" tabindex="0" role="button" aria-label="Explore adjustable lighting ideas">
+        <circle class="room-part-shape" cx="492" cy="90" r="52" fill="transparent" pointer-events="all"/>
+        <ellipse class="room-part-shape" cx="279" cy="361" rx="26" ry="25" fill="transparent" pointer-events="all"/>
+      </g>
+    </g>
+  </svg>`;
+}
+
+function createArchetypeShareCardBlob(archetype,mantra,colors) {
+  const canvas=document.createElement("canvas");
+  canvas.width=1080;canvas.height=1350;
+  const context=canvas.getContext("2d");
+  if(!context)throw new Error("Your browser could not prepare the share card.");
+  const background=context.createLinearGradient(0,0,1080,1350);
+  background.addColorStop(0,"#173d32");background.addColorStop(.58,"#263d35");background.addColorStop(1,"#65445f");
+  context.fillStyle=background;context.fillRect(0,0,1080,1350);
+  context.fillStyle="#ffffff0c";context.beginPath();context.arc(890,205,265,0,Math.PI*2);context.fill();
+  context.fillStyle="#ffffff0a";context.beginPath();context.arc(140,1130,330,0,Math.PI*2);context.fill();
+  context.fillStyle="#f3d37e";context.font="700 30px Segoe UI, sans-serif";context.fillText("MAWAESU",92,112);
+  context.fillStyle="#f5eee4a8";context.font="500 18px Segoe UI, sans-serif";context.fillText("KNOW YOURSELF · UNDERSTAND YOUR WORLD",92,151);
+  const centerX=540,centerY=365;
+  for(let i=0;i<5;i++){
+    context.beginPath();context.arc(centerX,centerY,156+i*21,0,Math.PI*2);context.strokeStyle=colors[i%colors.length]+"55";context.lineWidth=2;context.stroke();
+  }
+  const orb=context.createRadialGradient(centerX-45,centerY-55,15,centerX,centerY,150);
+  orb.addColorStop(0,colors[0]);orb.addColorStop(.58,colors[1]);orb.addColorStop(1,colors[3]);
+  context.beginPath();context.arc(centerX,centerY,140,0,Math.PI*2);context.fillStyle=orb;context.fill();
+  context.beginPath();context.ellipse(centerX-35,centerY-70,55,26,-.5,0,Math.PI*2);context.fillStyle="#ffffff3a";context.fill();
+  const symbol=archetype.name.trim().split(/\s+/)[0];
+  context.textAlign="center";context.font="88px Segoe UI Emoji, Segoe UI, sans-serif";context.fillStyle="#fff";context.fillText(symbol,centerX,centerY+30);
+  context.textAlign="left";context.fillStyle="#f3d37e";context.font="700 22px Segoe UI, sans-serif";context.fillText("A REFLECTION TO CARRY WITH YOU",92,642);
+  context.fillStyle="#fffaf0";context.font="700 58px Georgia, serif";
+  const nameLines=wrapShareText(context,archetype.name,890);
+  nameLines.slice(0,2).forEach((line,index)=>context.fillText(line,92,724+index*70));
+  if(mantra){
+    context.fillStyle="#f5eee4";context.font="italic 34px Georgia, serif";
+    wrapShareText(context,`“${mantra}”`,850).slice(0,3).forEach((line,index)=>context.fillText(line,92,890+index*48));
+  }
+  const swatchY=1125,swatchWidth=152,gap=44;
+  colors.forEach((color,index)=>{
+    const x=92+index*(swatchWidth+gap);
+    context.fillStyle=color;roundCanvasRect(context,x,swatchY,swatchWidth,54,18);context.fill();
+  });
+  context.fillStyle="#f5eee4b8";context.font="500 19px Segoe UI, sans-serif";context.fillText("A starting point for reflection · not a label or diagnosis",92,1240);
+  context.fillStyle="#f3d37e";context.font="700 19px Segoe UI, sans-serif";context.fillText("MAWAESU  ·  mawaesu-toknowyou.web.app",92,1296);
+  return new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error("Your browser could not create the share-card image.")),"image/png"));
+}
+
+function wrapShareText(context,text,maxWidth) {
+  const words=text.split(/\s+/),lines=[];
+  let line="";
+  for(const word of words){
+    const next=line?`${line} ${word}`:word;
+    if(context.measureText(next).width>maxWidth&&line){lines.push(line);line=word;}
+    else line=next;
+  }
+  if(line)lines.push(line);
+  return lines;
+}
+
+function roundCanvasRect(context,x,y,width,height,radius) {
+  context.beginPath();
+  context.roundRect(x,y,width,height,radius);
+}
+
+async function downloadArchetypeShareCard(archetype,mantra,colors) {
+  try{
+    const blob=await createArchetypeShareCardBlob(archetype,mantra,colors);
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement("a");
+    link.href=url;
+    link.download=`mawaesu-${archetype.name.normalize("NFKD").replace(/[^\w-]+/g,"-").replace(/^-|-$/g,"").toLowerCase()||"archetype"}-reflection.png`;
+    document.body.append(link);link.click();link.remove();
+    window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+    toast("Archetype share card downloaded");
+  }catch(error){toast("Could not create the share card: "+error.message);}
+}
+
+async function shareArchetypeShareCard(archetype,mantra,colors) {
+  try{
+    const blob=await createArchetypeShareCardBlob(archetype,mantra,colors);
+    const file=new File([blob],"mawaesu-archetype.png",{type:"image/png"});
+    const shareText=`${archetype.name}${mantra?` — “${mantra}”`:""} · A reflection, not a label.`;
+    if(navigator.share&&navigator.canShare?.({files:[file]})){
+      await navigator.share({files:[file],title:"My MAWAESU archetype reflection",text:shareText});
+      return;
+    }
+    if(navigator.share){
+      await navigator.share({title:"My MAWAESU archetype reflection",text:shareText,url:`${location.origin}${location.pathname}#archetype`});
+      return;
+    }
+    await downloadArchetypeShareCard(archetype,mantra,colors);
+    toast("Sharing is unavailable here, so the card was downloaded instead.");
+  }catch(error){
+    if(error.name==="AbortError")return;
+    toast("Could not share your reflection: "+error.message);
+  }
+}
 
 function renderInlineColorAnalysis(score, archetype) {
   const numericScore = score===null||score===undefined||score==="" ? NaN : Number(score);
